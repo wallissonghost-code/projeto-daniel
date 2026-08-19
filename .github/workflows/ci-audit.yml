@@ -1,0 +1,56 @@
+name: Caos Live2 CI Audit
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package.json
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Architecture check
+        run: npm run check:architecture
+
+      - name: Game integrity check
+        run: npm run check:game
+
+      - name: Runtime audit
+        run: npm run check:runtime
+
+      - name: Natural events check
+        run: npm run check:events
+
+      - name: Menu smoke test
+        run: npm run check:menu
+
+      - name: Gameplay bot
+        run: npm run check:gameplay
+
+      - name: Ghost aim regression
+        run: npm run check:ghost-aim
+
+      - name: Progression regression
+        run: npm run check:progression
+
+      - name: Full validation
+        run: npm run validate
