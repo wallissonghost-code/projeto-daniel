@@ -52,10 +52,7 @@ jobs:
         run: |
           from pathlib import Path
           import json, re
-
           root = Path('target')
-
-          # index.html: remove every visible multiplayer/duo entry and duo ranking tab.
           p = root / 'index.html'
           s = p.read_text(encoding='utf-8')
           s = re.sub(r'<div id="duoMini".*?</div>', '', s, flags=re.S)
@@ -67,42 +64,32 @@ jobs:
           s = s.replace('Player + Pose Armada + Weapon em PNG direto', 'Base solo otimizada')
           p.write_text(s, encoding='utf-8')
 
-          # Bootstrap: game only. Multiplayer must never be requested by the browser.
           p = root / 'src/core/game-bootstrap.mjs'
           if p.exists():
               s = p.read_text(encoding='utf-8')
               s = re.sub(r'\n\s*await loadClassic\(`src/multiplayer-entry\.js[^\n]*\);', '', s)
               p.write_text(s, encoding='utf-8')
 
-          # Main bootstrap currently materializes game.js itself. Remove known duo-only guards
-          # where safe; the legacy runtime keeps harmless internal compatibility fields until
-          # its full modular migration, but there is no network/second-player entry point.
           p = root / 'src/core/skills-bootstrap.mjs'
           if p.exists():
               s = p.read_text(encoding='utf-8')
               s = s.replace("if(player.down||(choosing&&duoPlayer.connected))return false;", "if(player.down||choosing)return false;")
               p.write_text(s, encoding='utf-8')
 
-          # Admin panel: single-player target. Keep every admin command, telemetry and Live rule.
           p = root / 'src/panel.js'
           if p.exists():
               s = p.read_text(encoding='utf-8')
-              # Remove P2 option synchronization; all admin commands target the solo player.
               s = re.sub(r"if\(d\.players&&\$\('playerTarget'\)\)\{.*?\}\}", '', s, flags=re.S)
-              s = s.replace("target:$('playerTarget')?.value||'p1'", "target:'p1'")
               s = s.replace("target:$('playerTarget')?.value||'p1'", "target:'p1'")
               p.write_text(s, encoding='utf-8')
 
           p = root / 'painel.html'
           if p.exists():
               s = p.read_text(encoding='utf-8')
-              # If a player target selector exists, keep only P1 and relabel it as PLAYER.
               s = re.sub(r'<option value="p2"[^>]*>.*?</option>', '', s, flags=re.S)
-              s = s.replace('P1 · HOST', 'PLAYER')
-              s = s.replace('PLAYER 1', 'PLAYER')
+              s = s.replace('P1 · HOST', 'PLAYER').replace('PLAYER 1', 'PLAYER')
               p.write_text(s, encoding='utf-8')
 
-          # Lean package: retain connector + validation only; no multiplayer game servers.
           pkg = json.loads((root/'package.json').read_text(encoding='utf-8'))
           scripts = pkg.setdefault('scripts', {})
           for key in list(scripts):
@@ -110,16 +97,8 @@ jobs:
                   scripts.pop(key, None)
           pkg['name'] = 'caos-live2'
           (root/'package.json').write_text(json.dumps(pkg, ensure_ascii=False, indent=2)+'\n', encoding='utf-8')
+          (root/'version.json').write_text(json.dumps({'version':'0.1.0','source':'wallissonghost-code/Game','mode':'solo-clean','admin':'full'}, ensure_ascii=False, indent=2)+'\n', encoding='utf-8')
 
-          # New clean version marker.
-          (root/'version.json').write_text(json.dumps({
-              'version': '0.1.0',
-              'source': 'wallissonghost-code/Game',
-              'mode': 'solo-clean',
-              'admin': 'full'
-          }, ensure_ascii=False, indent=2)+'\n', encoding='utf-8')
-
-          # Ensure source-only links do not survive in obvious entrypoints.
           for rel in ['index.html', 'src/core/game-bootstrap.mjs']:
               text = (root/rel).read_text(encoding='utf-8').lower()
               forbidden = ['multiplayer-entry.js', 'multiplayerbtn', 'duoinvitebtn', 'duomini']
