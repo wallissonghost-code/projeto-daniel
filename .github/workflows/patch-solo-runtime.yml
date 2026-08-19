@@ -1,0 +1,40 @@
+name: Patch solo runtime
+
+on:
+  push:
+    paths:
+      - '.github/workflows/patch-solo-runtime.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Make visual assets optional
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('src/game.js')
+          s=p.read_text()
+          old="let playerLoadFinished=false;function syncStartButton(){const b=$('startBtn');if(!b)return;const skinReady=playerArmedReady||playerV2Ready||soldierReady,gunReady=weaponV2Ready||weaponReady;if(skinReady&&gunReady){b.disabled=false;b.textContent='ENTRAR NA ARENA';b.style.opacity='1'}else{b.disabled=true;b.textContent=playerLoadFinished?'SKIN DO PLAYER INDISPONÍVEL':'CARREGANDO PERSONAGEM...';b.style.opacity='.58'}}"
+          new="let playerLoadFinished=false;function syncStartButton(){const b=$('startBtn');if(!b)return;const skinReady=true,gunReady=true;b.disabled=false;b.textContent='ENTRAR NA ARENA';b.style.opacity='1'}"
+          if old not in s:
+              raise SystemExit('syncStartButton signature not found; refusing unsafe patch')
+          s=s.replace(old,new,1)
+          p.write_text(s)
+          PY
+      - name: Verify patch
+        run: |
+          grep -q "const skinReady=true,gunReady=true" src/game.js
+          grep -q "function syncStartButton" src/game.js
+      - name: Commit runtime fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/game.js
+          git commit -m "fix: allow solo game without visual skin assets"
+          git push
