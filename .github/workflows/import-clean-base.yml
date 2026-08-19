@@ -35,17 +35,32 @@ jobs:
             --exclude='README.md' \
             source/ target/
 
-      - name: Remove multiplayer, duo and character skins
+      - name: Remove legacy/multiplayer/cosmetic payload
         shell: bash
         run: |
           cd target
+          rm -rf .ci .ci-trigger
           rm -f duo.html duo-server.html multiplayer.html multiplayer-v2.html skin-test-local.html
           rm -f src/duo.js src/duo-server.js src/duo-server-game.js
           rm -f src/multiplayer-entry.js src/multiplayer.js src/multiplayer-v2.js
           rm -rf assets/mobs assets/player assets/player-armed assets/bosses
           rm -f docs/multiplayer-decisions.md
           rm -f cloud/game-server.mjs cloud/game-server-v2.mjs cloud/game-server-v3.mjs
-          find scripts -maxdepth 1 -type f \( -iname '*duo*' -o -iname '*multiplayer*' -o -iname '*skin*' -o -iname '*boss-skin*' \) -delete 2>/dev/null || true
+
+          # Keep only runtime/validation scripts that belong to the clean base.
+          if [ -d scripts ]; then
+            find scripts -maxdepth 1 -type f \
+              ! -name 'tiktok-bridge.mjs' \
+              ! -name 'check-game.mjs' \
+              ! -name 'check-architecture.mjs' \
+              ! -name 'audit-runtime.mjs' \
+              ! -name 'check-natural-events.mjs' \
+              ! -name 'smoke-menu.mjs' \
+              ! -name 'gameplay-bot.mjs' \
+              ! -name 'ghost-aim-bot.mjs' \
+              ! -name 'progression-bot.mjs' \
+              -delete
+          fi
 
       - name: Apply solo/admin cleanup
         shell: python
@@ -53,6 +68,7 @@ jobs:
           from pathlib import Path
           import json, re
           root = Path('target')
+
           p = root / 'index.html'
           s = p.read_text(encoding='utf-8')
           s = re.sub(r'<div id="duoMini".*?</div>', '', s, flags=re.S)
@@ -76,6 +92,7 @@ jobs:
               s = s.replace("if(player.down||(choosing&&duoPlayer.connected))return false;", "if(player.down||choosing)return false;")
               p.write_text(s, encoding='utf-8')
 
+          # Admin remains complete, but every game command is now solo-only.
           p = root / 'src/panel.js'
           if p.exists():
               s = p.read_text(encoding='utf-8')
@@ -97,7 +114,13 @@ jobs:
                   scripts.pop(key, None)
           pkg['name'] = 'caos-live2'
           (root/'package.json').write_text(json.dumps(pkg, ensure_ascii=False, indent=2)+'\n', encoding='utf-8')
-          (root/'version.json').write_text(json.dumps({'version':'0.1.0','source':'wallissonghost-code/Game','mode':'solo-clean','admin':'full'}, ensure_ascii=False, indent=2)+'\n', encoding='utf-8')
+
+          (root/'version.json').write_text(json.dumps({
+              'version':'0.1.0',
+              'source':'wallissonghost-code/Game',
+              'mode':'solo-clean',
+              'admin':'full'
+          }, ensure_ascii=False, indent=2)+'\n', encoding='utf-8')
 
           for rel in ['index.html', 'src/core/game-bootstrap.mjs']:
               text = (root/rel).read_text(encoding='utf-8').lower()
@@ -120,6 +143,10 @@ jobs:
           test ! -e assets/player
           test ! -e assets/mobs
           test ! -e assets/bosses
+          test ! -e cloud/game-server-v2.mjs
+          test ! -e cloud/game-server-v3.mjs
+          test ! -e .ci
+          test ! -e .ci-trigger
           ! grep -RIl --exclude-dir=.git -E 'src/(multiplayer|duo)(-entry|-server|-v2)?\.js' index.html src/core 2>/dev/null | grep -q .
 
       - name: Commit imported clean base
