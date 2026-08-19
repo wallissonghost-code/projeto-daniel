@@ -46,8 +46,6 @@ jobs:
           rm -rf assets/mobs assets/player assets/player-armed assets/bosses
           rm -f docs/multiplayer-decisions.md
           rm -f cloud/game-server.mjs cloud/game-server-v2.mjs cloud/game-server-v3.mjs
-
-          # Keep only runtime/validation scripts that belong to the clean base.
           if [ -d scripts ]; then
             find scripts -maxdepth 1 -type f \
               ! -name 'tiktok-bridge.mjs' \
@@ -92,6 +90,23 @@ jobs:
               s = s.replace("if(player.down||(choosing&&duoPlayer.connected))return false;", "if(player.down||choosing)return false;")
               p.write_text(s, encoding='utf-8')
 
+          # Character/mob/boss skins are intentionally absent. The game must never
+          # block startup while waiting for those optional cosmetic resources.
+          p = root / 'src/game.js'
+          if p.exists():
+              s = p.read_text(encoding='utf-8')
+              s = re.sub(
+                  r"let playerLoadFinished=false;function syncStartButton\(\)\{.*?\}async function prepZipImage",
+                  "let playerLoadFinished=true;function syncStartButton(){const b=$('startBtn');if(!b)return;b.disabled=false;b.textContent='ENTRAR NA ARENA';b.style.opacity='1'}async function prepZipImage",
+                  s,
+                  count=1,
+                  flags=re.S,
+              )
+              # Do not issue guaranteed 404 requests for removed base player/boss skins.
+              s = re.sub(r"soldierSprite\.src='\./assets/player/frame_001\.png\?v='\+ASSET_TAG;", "soldierReady=false;", s, count=1)
+              s = re.sub(r"\(async\(\)=>\{const \[colossus,voidlord\]=await Promise\.all\(\[loadOgrePack\('\./assets/bosses/Ogroboss1\.zip'.*?\}\)\)\(\);", "bossColossusReady=false;bossVoidReady=false;bossOgreReady=false;", s, count=1, flags=re.S)
+              p.write_text(s, encoding='utf-8')
+
           # Admin remains complete, but every game command is now solo-only.
           p = root / 'src/panel.js'
           if p.exists():
@@ -128,6 +143,10 @@ jobs:
               bad = [x for x in forbidden if x in text]
               if bad:
                   raise SystemExit(f'{rel}: forbidden runtime references remain: {bad}')
+
+          game = (root/'src/game.js').read_text(encoding='utf-8')
+          if "b.disabled=false;b.textContent='ENTRAR NA ARENA'" not in game:
+              raise SystemExit('game.js: skin-independent start patch was not applied')
 
       - name: Validate clean boundary
         shell: bash
