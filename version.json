@@ -1,5 +1,6 @@
 {
   "version": "0.1.0",
-  "source": "Caos Live",
-  "mode": "solo-clean"
+  "source": "wallissonghost-code/Game",
+  "mode": "solo-clean",
+  "admin": "full"
 }
