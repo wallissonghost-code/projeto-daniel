@@ -13,9 +13,9 @@ export class LiveEngine extends EventTarget{
   snapshot(){return {settings:this.settings,catalog:this.catalog,rules:this.rules,discovered:this.discovered,stats:{...this.stats}}}
   resetSession(){this.stats={like:0,chat:0,follow:0,share:0,gift:0,last:null,startedAt:Date.now()};this.likeProgress.clear();this.emit('state',this.snapshot())}
   onMessage(m){
-    if(m.type==='status'&&m.status==='connected'&&!this.stats.startedAt)this.stats.startedAt=Date.now();
+    if(m.type==='status'&&m.status==='connected'&&!this.stats.startedAt&&!m.observer)this.stats.startedAt=Date.now();
     if(m.type==='gift_catalog')this.mergeCatalog(m.gifts||[],m.capturedAt||Date.now(),false);
-    if(['like','chat','follow','share','gift'].includes(m.type)){this.captureEvent(m);this.runRules(m)}
+    if(['like','chat','follow','share','gift'].includes(m.type)){this.captureEvent(m);if(!m.observer)this.runRules(m)}
     this.emit('message',m);this.emit('state',this.snapshot());
   }
   findGift(id,name){
@@ -23,8 +23,7 @@ export class LiveEngine extends EventTarget{
     return (sid&&this.catalog.find(g=>String(g.id||'')===sid))||(n&&this.catalog.find(g=>norm(g.name)===n))||null;
   }
   captureEvent(m){
-    if(m.type==='like')this.stats.like+=Math.max(1,Number(m.count)||1);else this.stats[m.type]=(this.stats[m.type]||0)+1;
-    this.stats.last={...m,at:Date.now()};
+    if(!m.observer){if(m.type==='like')this.stats.like+=Math.max(1,Number(m.count)||1);else this.stats[m.type]=(this.stats[m.type]||0)+1;this.stats.last={...m,at:Date.now()}}
     if(m.type==='gift'&&this.settings.capture!==false){
       const known=this.findGift(m.giftId,m.gift);
       const gift={
