@@ -6,10 +6,14 @@ services:
     buildCommand: npm install
     startCommand: npm start
     healthCheckPath: /health
+    autoDeployTrigger: commit
     envVars:
       - key: NODE_VERSION
-        value: 22
+        value: "24"
+      # Cada instalação define a própria chave do WebSocket no Render.
       - key: LIVE_CONNECTOR_KEY
         sync: false
+      # Opcional. Sem esta variável o conector trabalha em modern-direct,
+      # igual ao fluxo estabilizado no Caos Live.
       - key: SIGN_API_KEY
         sync: false
