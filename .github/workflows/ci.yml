@@ -15,7 +15,8 @@ jobs:
         with:
           node-version: 22
       - run: npm install --ignore-scripts
-      - run: npm run check
+      - name: Syntax + AI functional audit
+        run: npm run check
       - name: Block gameplay coupling
         run: |
           node - <<'NODE'
