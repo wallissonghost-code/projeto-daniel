@@ -1,0 +1,8 @@
+{
+  "schema": "liveplus.verified-gifts.v1",
+  "version": "0.1.0",
+  "verifiedAt": 0,
+  "source": "curated-live-verification",
+  "notes": "Somente presentes realmente verificados devem ser adicionados aqui. IDs permanecem internos e não são exibidos na interface comercial.",
+  "gifts": []
+}
