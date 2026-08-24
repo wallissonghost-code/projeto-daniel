@@ -28,19 +28,19 @@
         <label class="field"><span>CONTA DA LIVE</span><input id="username" autocomplete="off" autocapitalize="off" placeholder="@usuario"></label>
       </div>
       <div class="actions four"><button id="connectCloud" class="primary">CONECTAR</button><button id="disconnectCloud" class="danger">DESCONECTAR</button><button id="connectLive" class="primary soft">CONECTAR LIVE</button><button id="stopLive">PARAR LIVE</button></div>
-      <div class="actions testActions"><button id="testPanel" class="secondary">TESTAR PAINEL SEM LIVE</button></div>
+      <div class="actions testActions"><button id="testConnector" class="secondary">TESTAR CONNECTOR</button><button id="testPanel">SIMULAR PAINEL SEM LIVE</button></div>
       <div class="notice" id="connectorNotice"><span class="noticeDot"></span><span>Nenhum conector configurado neste navegador.</span></div>
     </section>
 
     <section class="card" id="healthSection">
-      <div class="sectionHead"><div><div class="kicker">02 · SAÚDE</div><h2>Conector + TikTok</h2><p class="sectionDesc">Leitura rápida do estado da sessão.</p></div><span class="badge fail" id="healthBadge"><i></i>AGUARDANDO</span></div>
+      <div class="sectionHead"><div><div class="kicker">02 · SAÚDE</div><h2>Conector + TikTok</h2><p class="sectionDesc">Heartbeat real do Connector separado dos eventos recebidos da Live.</p></div><span class="badge fail" id="healthBadge"><i></i>AGUARDANDO</span></div>
       <div class="stats health">
         <div class="stat primaryStat"><span>CONTA</span><strong id="healthAccount">—</strong><small>TikTok</small></div>
-        <div class="stat"><span>CONECTOR</span><strong id="healthCloud">OFF</strong><small>WebSocket</small></div>
+        <div class="stat"><span>CONECTOR</span><strong id="healthCloud">OFF</strong><small>WebSocket + auth</small></div>
         <div class="stat"><span>TIKTOK LIVE</span><strong id="healthTikTok">OFF</strong><small>Sessão</small></div>
-        <div class="stat"><span>EVENTOS</span><strong id="healthEvents">AGUARDANDO</strong><small>Fluxo</small></div>
+        <div class="stat"><span>EVENTOS</span><strong id="healthEvents">AGUARDANDO</strong><small>Fluxo da Live</small></div>
         <div class="stat"><span>DURAÇÃO</span><strong id="duration">00:00</strong><small>Sessão</small></div>
-        <div class="stat"><span>ÚLTIMO SINAL</span><strong id="lastSignal">—</strong><small>Heartbeat</small></div>
+        <div class="stat"><span>HEARTBEAT</span><strong id="lastSignal">—</strong><small>Último pong</small></div>
       </div>
     </section>
 
@@ -55,9 +55,9 @@
     </section>
 
     <section class="card" id="catalogSection">
-      <div class="sectionHead"><div><div class="kicker">04 · PRESENTES</div><h2>Catálogo verificado</h2><p class="sectionDesc">Confirma ID, nome, imagem e diamantes cruzando catálogo da sala com eventos reais.</p></div><span class="badge" id="catalogCount">0 VERIFICADOS</span></div>
-      <button id="captureCatalog" class="primary full captureBtn">CAPTURAR CATÁLOGO DA LIVE</button>
-      <div class="filters"><div class="searchBox"><span>⌕</span><input id="giftSearch" placeholder="Buscar nome ou ID"></div><select id="giftSort"><option value="price">MENOR VALOR</option><option value="name">NOME</option></select></div>
+      <div class="sectionHead"><div><div class="kicker">04 · PRESENTES</div><h2>Presentes verificados</h2><p class="sectionDesc">Lista limpa para uso comercial: imagem, nome, valor e confirmação. O ID continua interno para a automação.</p></div><span class="badge" id="catalogCount">0 VERIFICADOS</span></div>
+      <button id="captureCatalog" class="primary full captureBtn">ATUALIZAR METADADOS DA LIVE</button>
+      <div class="filters"><div class="searchBox"><span>⌕</span><input id="giftSearch" placeholder="Buscar presente"></div><select id="giftSort"><option value="price">MENOR VALOR</option><option value="name">NOME</option></select></div>
       <div id="giftList" class="list"></div>
     </section>
 
@@ -74,8 +74,8 @@
       <div id="ruleList" class="list compact"></div>
     </section>
 
-    <section class="card" id="observerSection">
-      <div class="sectionHead"><div><div class="kicker">06 · VERIFICAÇÃO</div><h2>Presentes ao vivo</h2><p class="sectionDesc">Usa a sessão principal quando possível; para outra conta, abre uma sessão própria de observação.</p></div><span class="badge" id="observerBadge">OBSERVADOR OFF</span></div>
+    <section class="card" id="observerSection" hidden>
+      <div class="sectionHead"><div><div class="kicker">FERRAMENTA TÉCNICA</div><h2>Verificador de presentes ao vivo</h2><p class="sectionDesc">Ferramenta avançada preservada para manutenção e validação; não aparece na interface comercial.</p></div><span class="badge" id="observerBadge">OBSERVADOR OFF</span></div>
       <div class="observerRow"><div class="inputShell"><b>@</b><input id="observerUser" autocapitalize="off" placeholder="usuario da Live"></div><button id="startObserver" class="primary">INICIAR</button><button id="stopObserver">PARAR</button></div>
       <div id="discoveredList" class="list"></div>
     </section>
