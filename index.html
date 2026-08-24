@@ -1,68 +1,88 @@
 <!doctype html>
 <html lang="pt-BR">
 <head>
-  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <title>Daniel Live · Connector Plus</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#07111c">
+  <title>Live+ Connector</title>
   <link rel="stylesheet" href="./src/styles.css">
 </head>
 <body>
+  <div class="ambient ambientA"></div><div class="ambient ambientB"></div>
   <main class="shell">
-    <header class="top"><div><div class="brand">DANIEL <b>LIVE+</b></div><div class="eyebrow">CONECTOR UNIVERSAL · TIKTOK LIVE</div></div><span class="badge" id="cloudBadge">DESCONECTADO</span></header>
+    <header class="topbar">
+      <div class="identity"><div class="logoMark">L+</div><div><div class="brand">LIVE<span>+</span></div><div class="eyebrow">UNIVERSAL TIKTOK CONNECTOR</div></div></div>
+      <div class="topActions"><span class="version">PLUS BETA</span><span class="badge" id="cloudBadge"><i></i>DESCONECTADO</span></div>
+    </header>
 
-    <nav class="sectionNav"><a href="#connectorSection">Conexão</a><a href="#healthSection">Saúde</a><a href="#engineSection">Eventos</a><a href="#catalogSection">Presentes</a><a href="#rulesSection">Regras</a><a href="#observerSection">Verificação</a></nav>
+    <nav class="quickNav" aria-label="Navegação"><a href="#connectorSection">Conexão</a><a href="#healthSection">Saúde</a><a href="#engineSection">Eventos</a><a href="#catalogSection">Presentes</a><a href="#rulesSection">Regras</a><a href="#observerSection">Verificação</a></nav>
 
-    <section class="card" id="connectorSection">
-      <div class="sectionHead"><div><span class="eyebrow">01 · CONEXÃO</span><h1>Seu conector</h1></div><span class="badge" id="connectorBadge">OFFLINE</span></div>
-      <p class="muted">Este painel não usa uma conta Cloud fixa. Cada usuário conecta o próprio endpoint, a própria chave e a própria conta TikTok.</p>
-      <div class="grid1">
-        <label>WebSocket do usuário<input id="endpoint" autocomplete="off" placeholder="wss://seu-conector.exemplo.com"></label>
-        <label>Chave do conector<input id="accessKey" type="password" autocomplete="off" placeholder="sua chave privada"></label>
-        <label>Conta da Live<input id="username" autocomplete="off" placeholder="@usuario"></label>
+    <section class="hero">
+      <div><div class="kicker">LIVE CONNECTOR PLUS</div><h1>Conecte. Escute. Automatize.</h1><p>Um painel universal para transformar eventos da TikTok Live em sinais confiáveis para qualquer aplicativo, jogo, overlay ou automação.</p></div>
+      <div class="heroStatus"><span class="pulse"></span><div><small>STATUS GERAL</small><strong id="heroStatusText">Aguardando conector</strong></div></div>
+    </section>
+
+    <section class="card cardGlow" id="connectorSection">
+      <div class="sectionHead"><div><div class="kicker">01 · CONEXÃO</div><h2>Seu conector</h2><p class="sectionDesc">Cada usuário conecta o próprio WebSocket e sua própria chave.</p></div><span class="badge" id="connectorBadge"><i></i>OFFLINE</span></div>
+      <div class="connectionGrid">
+        <label class="field wideField"><span>WEBSOCKET DO CONECTOR</span><div class="inputShell"><b>WSS</b><input id="endpoint" autocomplete="off" inputmode="url" placeholder="wss://seu-conector.exemplo.com"></div></label>
+        <label class="field"><span>CHAVE PRIVADA</span><input id="accessKey" type="password" autocomplete="off" placeholder="Sua chave do conector"></label>
+        <label class="field"><span>CONTA DA LIVE</span><input id="username" autocomplete="off" autocapitalize="off" placeholder="@usuario"></label>
       </div>
-      <div class="actions"><button id="connectCloud" class="primary">CONECTAR</button><button id="disconnectCloud" class="danger">DESCONECTAR</button><button id="connectLive" class="primary">CONECTAR LIVE</button><button id="stopLive">PARAR LIVE</button></div>
-      <div class="notice" id="connectorNotice">Nenhum conector configurado neste navegador.</div>
+      <div class="actions four"><button id="connectCloud" class="primary">CONECTAR</button><button id="disconnectCloud" class="danger">DESCONECTAR</button><button id="connectLive" class="primary soft">CONECTAR LIVE</button><button id="stopLive">PARAR LIVE</button></div>
+      <div class="actions testActions"><button id="testPanel" class="secondary">TESTAR PAINEL SEM LIVE</button></div>
+      <div class="notice" id="connectorNotice"><span class="noticeDot"></span><span>Nenhum conector configurado neste navegador.</span></div>
     </section>
 
     <section class="card" id="healthSection">
-      <div class="sectionHead"><div><span class="eyebrow">02 · SAÚDE</span><h2>Conector + TikTok</h2></div><span class="badge fail" id="healthBadge">AGUARDANDO</span></div>
-      <div class="stats health"><div><span>CONTA</span><strong id="healthAccount">—</strong></div><div><span>CONECTOR</span><strong id="healthCloud">OFF</strong></div><div><span>TIKTOK LIVE</span><strong id="healthTikTok">OFF</strong></div><div><span>EVENTOS</span><strong id="healthEvents">AGUARDANDO</strong></div><div><span>DURAÇÃO</span><strong id="duration">00:00</strong></div><div><span>ÚLTIMO SINAL</span><strong id="lastSignal">—</strong></div></div>
+      <div class="sectionHead"><div><div class="kicker">02 · SAÚDE</div><h2>Conector + TikTok</h2><p class="sectionDesc">Leitura rápida do estado da sessão.</p></div><span class="badge fail" id="healthBadge"><i></i>AGUARDANDO</span></div>
+      <div class="stats health">
+        <div class="stat primaryStat"><span>CONTA</span><strong id="healthAccount">—</strong><small>TikTok</small></div>
+        <div class="stat"><span>CONECTOR</span><strong id="healthCloud">OFF</strong><small>WebSocket</small></div>
+        <div class="stat"><span>TIKTOK LIVE</span><strong id="healthTikTok">OFF</strong><small>Sessão</small></div>
+        <div class="stat"><span>EVENTOS</span><strong id="healthEvents">AGUARDANDO</strong><small>Fluxo</small></div>
+        <div class="stat"><span>DURAÇÃO</span><strong id="duration">00:00</strong><small>Sessão</small></div>
+        <div class="stat"><span>ÚLTIMO SINAL</span><strong id="lastSignal">—</strong><small>Heartbeat</small></div>
+      </div>
     </section>
 
     <section class="card" id="engineSection">
-      <div class="sectionHead"><div><span class="eyebrow">03 · EVENTOS DA LIVE</span><h2>Live Engine</h2></div><span class="badge" id="engineBadge">OFF</span></div>
-      <div class="toggleRow"><div><b>CAPTURA AO VIVO</b><small>presentes, valor, curtidas, comentários, seguidores e compartilhamentos</small></div><input id="captureToggle" type="checkbox"></div>
-      <div class="toggleRow"><div><b>REGRAS</b><small>dispara somente eventos universais normalizados</small></div><input id="automationToggle" type="checkbox"></div>
-      <div class="stats"><div><span>LIKES</span><strong id="likes">0</strong></div><div><span>COMENT.</span><strong id="chat">0</strong></div><div><span>FOLLOW</span><strong id="follow">0</strong></div><div><span>SHARE</span><strong id="share">0</strong></div><div><span>GIFTS</span><strong id="gift">0</strong></div></div>
-      <div class="notice"><span>ÚLTIMO EVENTO</span><strong id="lastEvent">—</strong></div>
+      <div class="sectionHead"><div><div class="kicker">03 · EVENTOS</div><h2>Live Engine</h2><p class="sectionDesc">Capture apenas sinais universais da TikTok Live.</p></div><span class="badge purpleBadge" id="engineBadge">OFF</span></div>
+      <div class="switchGrid">
+        <label class="toggleRow"><div class="toggleIcon">LIVE</div><div class="toggleCopy"><b>CAPTURA AO VIVO</b><small>presentes, valor, curtidas, comentários, seguidores e compartilhamentos</small></div><input id="captureToggle" type="checkbox"><span class="switch"></span></label>
+        <label class="toggleRow"><div class="toggleIcon">RULE</div><div class="toggleCopy"><b>REGRAS</b><small>dispara eventos universais normalizados</small></div><input id="automationToggle" type="checkbox"><span class="switch"></span></label>
+      </div>
+      <div class="stats eventStats"><div class="stat"><span>LIKES</span><strong id="likes">0</strong></div><div class="stat"><span>COMENT.</span><strong id="chat">0</strong></div><div class="stat"><span>FOLLOW</span><strong id="follow">0</strong></div><div class="stat"><span>SHARE</span><strong id="share">0</strong></div><div class="stat"><span>GIFTS</span><strong id="gift">0</strong></div></div>
+      <div class="notice eventNotice"><span>ÚLTIMO EVENTO</span><strong id="lastEvent">—</strong></div>
     </section>
 
     <section class="card" id="catalogSection">
-      <div class="sectionHead"><div><span class="eyebrow">04 · CATÁLOGO</span><h2>Presentes verificados</h2></div><span class="badge greenBadge" id="catalogCount">0 verificados</span></div>
-      <p class="muted">O catálogo local é confirmado pela própria Live do usuário. Depois podemos sincronizá-lo com um catálogo global verificado do Daniel Live+.</p>
-      <div class="actions"><button id="captureCatalog" class="primary">CAPTURAR CATÁLOGO DA LIVE</button></div>
-      <div class="filters"><input id="giftSearch" placeholder="Buscar presente, nome ou ID"><select id="giftSort"><option value="price">MENOR VALOR</option><option value="name">NOME</option></select></div>
+      <div class="sectionHead"><div><div class="kicker">04 · PRESENTES</div><h2>Catálogo verificado</h2><p class="sectionDesc">Confirma ID, nome e diamantes usando dados recebidos na Live.</p></div><span class="badge" id="catalogCount">0 VERIFICADOS</span></div>
+      <button id="captureCatalog" class="primary full captureBtn">CAPTURAR CATÁLOGO DA LIVE</button>
+      <div class="filters"><div class="searchBox"><span>⌕</span><input id="giftSearch" placeholder="Buscar nome ou ID"></div><select id="giftSort"><option value="price">MENOR VALOR</option><option value="name">NOME</option></select></div>
       <div id="giftList" class="list"></div>
     </section>
 
     <section class="card" id="rulesSection">
-      <div class="sectionHead"><div><span class="eyebrow">05 · REGRAS UNIVERSAIS</span><h2>Criar gatilho</h2></div><span class="badge">SEM GAMEPLAY</span></div>
-      <p class="muted">A regra apenas identifica um evento da TikTok Live e emite um pacote universal. O aplicativo que receber o evento decide o que fazer.</p>
-      <div class="grid2">
-        <label>Evento<select id="ruleTrigger"><option value="gift">🎁 Presente específico</option><option value="giftvalue">💎 Valor da doação</option><option value="giftany">🎁 Qualquer presente</option><option value="like">❤️ Curtidas</option><option value="follow">➕ Novo seguidor</option><option value="share">🔁 Compartilhou a Live</option><option value="chat">💬 Comentário</option></select></label>
-        <label>Presente verificado<select id="ruleGift"><option value="">Selecione um verificado</option></select></label>
-        <label>Quantidade / valor mínimo<input id="ruleQuantity" type="number" min="1" value="1"></label>
-        <label>Cooldown (s)<input id="ruleCooldown" type="number" min="0" value="2"></label>
+      <div class="sectionHead"><div><div class="kicker">05 · REGRAS</div><h2>Gatilhos universais</h2><p class="sectionDesc">Sem lógica de jogo. Só detecta o evento e emite o pacote normalizado.</p></div><span class="badge purpleBadge">UNIVERSAL</span></div>
+      <div class="infoBanner"><b>EVENTOS DISPONÍVEIS</b><span>Presente específico · valor mínimo · qualquer presente · curtidas · seguidor · compartilhamento · comentário</span></div>
+      <div class="grid2 formGrid">
+        <label class="field"><span>EVENTO</span><select id="ruleTrigger"><option value="gift">🎁 Presente específico</option><option value="giftvalue">💎 Valor da doação</option><option value="giftany">🎁 Qualquer presente</option><option value="like">❤️ Curtidas</option><option value="follow">➕ Novo seguidor</option><option value="share">↗ Compartilhou a Live</option><option value="chat">💬 Comentário</option></select></label>
+        <label class="field"><span>PRESENTE VERIFICADO</span><select id="ruleGift"><option value="">Selecione um verificado</option></select></label>
+        <label class="field"><span>QUANTIDADE / VALOR MÍNIMO</span><input id="ruleQuantity" type="number" min="1" value="1"></label>
+        <label class="field"><span>COOLDOWN (S)</span><input id="ruleCooldown" type="number" min="0" value="2"></label>
       </div>
       <button id="saveRule" class="primary full">+ SALVAR REGRA</button>
       <div id="ruleList" class="list compact"></div>
     </section>
 
     <section class="card" id="observerSection">
-      <div class="sectionHead"><div><span class="eyebrow">06 · VERIFICAÇÃO</span><h2>Presentes ao vivo</h2></div><span class="badge" id="observerBadge">OBSERVADOR OFF</span></div>
-      <p class="muted">Presentes recebidos de verdade podem confirmar ID, nome e valor na sessão do usuário sem depender de uma conta Cloud central.</p>
-      <div class="actions"><input id="observerUser" placeholder="@usuario da Live para observar"><button id="startObserver" class="primary">INICIAR OBSERVAÇÃO</button><button id="stopObserver">PARAR</button></div>
+      <div class="sectionHead"><div><div class="kicker">06 · VERIFICAÇÃO</div><h2>Presentes ao vivo</h2><p class="sectionDesc">Observe uma conta para descobrir e validar presentes recebidos.</p></div><span class="badge" id="observerBadge">OBSERVADOR OFF</span></div>
+      <div class="observerRow"><div class="inputShell"><b>@</b><input id="observerUser" autocapitalize="off" placeholder="usuario da Live"></div><button id="startObserver" class="primary">INICIAR</button><button id="stopObserver">PARAR</button></div>
       <div id="discoveredList" class="list"></div>
     </section>
+
+    <footer><span>LIVE+ CONNECTOR</span><small>Universal · modular · independente de gameplay</small></footer>
   </main>
   <script type="module" src="./src/app.js"></script>
 </body>
