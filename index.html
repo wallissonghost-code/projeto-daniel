@@ -1,94 +1,73 @@
 <!doctype html>
 <html lang="pt-BR">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#050713">
-  <title>Daniel Live · Control Center</title>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Projeto Daniel · Live Connector</title>
   <link rel="stylesheet" href="./src/styles.css">
 </head>
 <body>
-  <div class="ambient ambientA"></div><div class="ambient ambientB"></div>
   <main class="shell">
-    <header class="topbar">
-      <div class="identity">
-        <div class="logoMark">D</div>
-        <div><div class="brand">DANIEL <b>LIVE</b></div><div class="eyebrow">CONTROL CENTER · TIKTOK LIVE</div></div>
-      </div>
-      <div class="topActions"><span class="version">PANEL V1</span><span class="badge" id="cloudBadge"><i></i>CLOUD OFFLINE</span></div>
-    </header>
+    <header class="top"><div><div class="brand">DANIEL <b>LIVE</b></div><div class="eyebrow">CENTRAL DE CONEXÃO · TIKTOK LIVE</div></div><span class="badge" id="cloudBadge">CLOUD OFFLINE</span></header>
 
-    <nav class="quickNav" aria-label="Seções do painel">
-      <a href="#connection">Conexão</a><a href="#health">Saúde</a><a href="#engine">Live Engine</a><a href="#catalog">Presentes</a><a href="#automation">Automação</a><a href="#observer">Observador</a>
+    <nav class="sectionNav">
+      <a href="#connectorSection">Conexão</a><a href="#healthSection">Saúde</a><a href="#engineSection">Live Engine</a><a href="#catalogSection">Presentes</a><a href="#rulesSection">Automação</a><a href="#observerSection">Observador</a>
     </nav>
 
-    <section class="hero">
-      <div><span class="kicker">LIVE OPERATIONS</span><h1>Central da Live</h1><p>Conecte o Cloud, acompanhe a TikTok Live e configure automações sem misturar o painel com a lógica do jogo.</p></div>
-      <div class="heroStatus"><span class="pulse"></span><div><small>STATUS GERAL</small><strong id="heroState">AGUARDANDO</strong></div></div>
-    </section>
-
-    <section class="card cardGlow" id="connection">
-      <div class="sectionHead"><div><span class="eyebrow">01 · CONECTOR</span><h2>TikTok Live</h2><p class="sectionDesc">Cloud + conta da transmissão.</p></div><span class="badge" id="connectorBadge"><i></i>OFFLINE</span></div>
-      <div class="connectionGrid">
-        <label class="field wideField"><span>WebSocket</span><div class="inputShell"><b>WS</b><input id="endpoint" placeholder="wss://seu-conector.onrender.com"></div></label>
-        <label class="field"><span>Chave de acesso</span><div class="inputShell"><b>KEY</b><input id="accessKey" type="password" placeholder="••••••••••"></div></label>
-        <label class="field"><span>Conta da Live</span><div class="inputShell"><b>@</b><input id="username" placeholder="usuario"></div></label>
+    <section class="card" id="connectorSection">
+      <div class="sectionHead"><div><span class="eyebrow">01 · CONECTOR</span><h1>TikTok Live</h1></div><span class="badge" id="connectorBadge">OFFLINE</span></div>
+      <p class="muted">Usa a mesma rota do conector do Caos Live, mas este painel não carrega nenhuma lógica de jogo.</p>
+      <div class="grid1">
+        <label>WebSocket<input id="endpoint" placeholder="wss://game-f202.onrender.com"></label>
+        <label>Chave<input id="accessKey" type="password" placeholder="••••••••••"></label>
+        <label>Conta da Live<input id="username" placeholder="@usuario"></label>
       </div>
-      <div class="actions four"><button id="connectCloud" class="primary">CONECTAR CLOUD</button><button id="disconnectCloud" class="danger">DESCONECTAR</button><button id="connectLive" class="primary soft">CONECTAR LIVE</button><button id="stopLive">PARAR LIVE</button></div>
-      <div class="notice" id="connectorNotice"><span class="noticeDot"></span><span>Cloud desconectado.</span></div>
+      <div class="actions"><button id="connectCloud" class="primary">CONECTAR CLOUD</button><button id="disconnectCloud" class="danger">DESCONECTAR</button><button id="connectLive" class="primary">CONECTAR LIVE</button><button id="stopLive">PARAR LIVE</button></div>
+      <div class="notice" id="connectorNotice">Cloud desconectado.</div>
     </section>
 
-    <section class="card" id="health">
-      <div class="sectionHead"><div><span class="eyebrow">02 · SAÚDE DA LIVE</span><h2>Cloud + TikTok</h2><p class="sectionDesc">Monitoramento rápido da sessão atual.</p></div><span class="badge fail" id="healthBadge"><i></i>AGUARDANDO</span></div>
-      <div class="stats health">
-        <div class="stat primaryStat"><span>CONTA</span><strong id="healthAccount">—</strong><small>perfil conectado</small></div>
-        <div class="stat"><span>CLOUD</span><strong id="healthCloud">OFF</strong><small>servidor</small></div>
-        <div class="stat"><span>TIKTOK LIVE</span><strong id="healthTikTok">OFF</strong><small>captura</small></div>
-        <div class="stat"><span>EVENTOS</span><strong id="healthEvents">AGUARDANDO</strong><small>atividade</small></div>
-        <div class="stat"><span>DURAÇÃO</span><strong id="duration">00:00</strong><small>sessão</small></div>
-        <div class="stat"><span>ÚLTIMO SINAL</span><strong id="lastSignal">—</strong><small>heartbeat</small></div>
-      </div>
+    <section class="card" id="healthSection">
+      <div class="sectionHead"><div><span class="eyebrow">02 · SAÚDE DA LIVE</span><h2>Cloud + TikTok</h2></div><span class="badge fail" id="healthBadge">AGUARDANDO</span></div>
+      <div class="stats health"><div><span>CONTA</span><strong id="healthAccount">—</strong></div><div><span>CLOUD</span><strong id="healthCloud">OFF</strong></div><div><span>TIKTOK LIVE</span><strong id="healthTikTok">OFF</strong></div><div><span>EVENTOS</span><strong id="healthEvents">AGUARDANDO</strong></div><div><span>DURAÇÃO</span><strong id="duration">00:00</strong></div><div><span>ÚLTIMO SINAL</span><strong id="lastSignal">—</strong></div></div>
     </section>
 
-    <section class="card" id="engine">
-      <div class="sectionHead"><div><span class="eyebrow">03 · CAPTURA & AUTOMAÇÃO</span><h2>Live Engine</h2><p class="sectionDesc">Eventos da transmissão em tempo real.</p></div><span class="badge" id="engineBadge"><i></i>OFF</span></div>
-      <div class="switchGrid">
-        <label class="toggleRow"><div class="toggleIcon">LIVE</div><div class="toggleCopy"><b>CAPTURA AO VIVO</b><small>likes, comentários, follow, share e gifts</small></div><input id="captureToggle" type="checkbox"><span class="switch"></span></label>
-        <label class="toggleRow"><div class="toggleIcon">AUTO</div><div class="toggleCopy"><b>AUTOMAÇÃO</b><small>executa as regras configuradas</small></div><input id="automationToggle" type="checkbox"><span class="switch"></span></label>
-      </div>
-      <div class="stats eventStats"><div class="stat"><span>LIKES</span><strong id="likes">0</strong></div><div class="stat"><span>COMENT.</span><strong id="chat">0</strong></div><div class="stat"><span>FOLLOW</span><strong id="follow">0</strong></div><div class="stat"><span>SHARE</span><strong id="share">0</strong></div><div class="stat"><span>GIFTS</span><strong id="gift">0</strong></div></div>
-      <div class="notice eventNotice"><span>ÚLTIMO EVENTO</span><strong id="lastEvent">—</strong></div>
+    <section class="card" id="engineSection">
+      <div class="sectionHead"><div><span class="eyebrow">03 · CAPTURA & AUTOMAÇÃO</span><h2>Live Engine</h2></div><span class="badge" id="engineBadge">OFF</span></div>
+      <div class="toggleRow"><div><b>CAPTURA AO VIVO</b><small>likes, comentários, follow, share e gifts</small></div><input id="captureToggle" type="checkbox"></div>
+      <div class="toggleRow"><div><b>AUTOMAÇÃO</b><small>executa regras genéricas configuradas abaixo</small></div><input id="automationToggle" type="checkbox"></div>
+      <div class="stats"><div><span>LIKES</span><strong id="likes">0</strong></div><div><span>COMENT.</span><strong id="chat">0</strong></div><div><span>FOLLOW</span><strong id="follow">0</strong></div><div><span>SHARE</span><strong id="share">0</strong></div><div><span>GIFTS</span><strong id="gift">0</strong></div></div>
+      <div class="notice"><span>ÚLTIMO EVENTO</span><strong id="lastEvent">—</strong></div>
     </section>
 
-    <section class="card" id="catalog">
-      <div class="sectionHead"><div><span class="eyebrow">04 · CATÁLOGO</span><h2>Presentes</h2><p class="sectionDesc">Capture, pesquise e configure presentes da Live.</p></div><span class="badge" id="catalogCount">0 PRESENTES</span></div>
-      <button id="captureCatalog" class="primary captureBtn">CAPTURAR PRESENTES AGORA</button>
-      <div class="filters"><div class="searchBox"><span>⌕</span><input id="giftSearch" placeholder="Buscar presente, nome ou ID"></div><select id="giftSort"><option value="price">MENOR VALOR</option><option value="name">NOME</option></select></div>
-      <div id="giftList" class="list giftList"></div>
+    <section class="card" id="catalogSection">
+      <div class="sectionHead"><div><span class="eyebrow">04 · CATÁLOGO</span><h2>Presentes verificados</h2></div><span class="badge greenBadge" id="catalogCount">0 verificados</span></div>
+      <p class="muted">O catálogo completo pode ser consultado pela mesma rota do Caos Live. Aqui aparecem somente presentes confirmados por evento real da Live.</p>
+      <div class="actions"><button id="captureCatalog" class="primary">ATUALIZAR CATÁLOGO DA ROTA</button></div>
+      <div class="filters"><input id="giftSearch" placeholder="Buscar presente, nome ou ID"><select id="giftSort"><option value="price">MENOR VALOR</option><option value="name">NOME</option></select></div>
+      <div id="giftList" class="list"></div>
     </section>
 
-    <section class="card" id="automation">
-      <div class="sectionHead"><div><span class="eyebrow">05 · AUTOMAÇÕES</span><h2>Criar regra</h2><p class="sectionDesc">Gatilho entra; ação genérica sai.</p></div><span class="badge purpleBadge">GENÉRICO</span></div>
-      <div class="infoBanner"><b>SEM GAMEPLAY ACOPLADO</b><span>Este painel envia somente uma ação + payload. O jogo decide como interpretar.</span></div>
-      <div class="grid2 formGrid">
-        <label class="field"><span>Gatilho</span><select id="ruleTrigger"><option value="gift">🎁 Presente específico</option><option value="like">❤️ Like</option><option value="chat">💬 Comentário</option><option value="follow">➕ Follow</option><option value="share">↗ Share</option></select></label>
-        <label class="field"><span>Presente</span><select id="ruleGift"><option value="">Qualquer presente</option></select></label>
-        <label class="field"><span>Quantidade</span><input id="ruleQuantity" type="number" min="1" value="1"></label>
-        <label class="field"><span>Cooldown (s)</span><input id="ruleCooldown" type="number" min="0" value="2"></label>
-        <label class="field wide"><span>ID da ação</span><input id="ruleAction" value="custom.command" placeholder="ex: spawn.enemy"></label>
-        <label class="field wide"><span>Payload JSON</span><textarea id="rulePayload" rows="4">{}</textarea></label>
+    <section class="card" id="rulesSection">
+      <div class="sectionHead"><div><span class="eyebrow">05 · AUTOMAÇÕES</span><h2>Criar regra</h2></div><span class="badge">SAÍDA GENÉRICA</span></div>
+      <p class="muted">Mesmas opções de ação do painel Caos Live, mas aqui elas apenas saem como comando para o jogo que você conectar depois.</p>
+      <div class="grid2">
+        <label>Gatilho<select id="ruleTrigger"><option value="gift">🎁 Presente específico</option><option value="giftvalue">💎 Valor da doação</option><option value="giftany">🎁 Qualquer doação · fallback</option><option value="like">❤️ Curtidas</option><option value="follow">➕ Novo seguidor</option><option value="share">🔁 Compartilhou Live</option><option value="chat">💬 Comentário</option></select></label>
+        <label>Presente verificado<select id="ruleGift"><option value="">Selecione um verificado</option></select></label>
+        <label>Quantidade / limite<input id="ruleQuantity" type="number" min="1" value="1"></label>
+        <label>Cooldown (s)<input id="ruleCooldown" type="number" min="0" value="2"></label>
+        <label class="wide">Ação no jogo<select id="ruleAction"><option value="spawn">👾 Criar mob</option><option value="boss">👹 Criar Boss</option><option value="damage">💥 Dano</option><option value="heal">❤️ Cura</option><option value="freeze">❄️ Congelar</option><option value="invincible">🛡️ Invencível</option><option value="xp">✨ XP</option><option value="level">⬆️ Level</option><option value="clear">🧹 Limpar arena</option><option value="custom.command">⚙️ Comando personalizado</option></select></label>
+        <label class="wide" id="customActionField">ID do comando personalizado<input id="customAction" placeholder="ex: spawn.enemy"></label>
+        <label class="wide">Payload JSON<textarea id="rulePayload" rows="4">{"value":1}</textarea></label>
       </div>
       <button id="saveRule" class="primary full">+ SALVAR AUTOMAÇÃO</button>
       <div id="ruleList" class="list compact"></div>
     </section>
 
-    <section class="card" id="observer">
-      <div class="sectionHead"><div><span class="eyebrow">06 · OBSERVAÇÃO</span><h2>Descobertas</h2><p class="sectionDesc">Observe novos presentes sem mexer no catálogo principal.</p></div><span class="badge" id="observerBadge"><i></i>OBSERVADOR OFF</span></div>
-      <div class="observerRow"><div class="inputShell"><b>@</b><input id="observerUser" placeholder="usuario da Live para observar"></div><button id="startObserver" class="primary">INICIAR</button><button id="stopObserver">PARAR</button></div>
+    <section class="card" id="observerSection">
+      <div class="sectionHead"><div><span class="eyebrow">06 · OBSERVAÇÃO</span><h2>Verificação ao vivo</h2></div><span class="badge" id="observerBadge">OBSERVADOR OFF</span></div>
+      <p class="muted">Quando um gift real chega, ele é marcado como verificado e passa a aparecer no catálogo principal.</p>
+      <div class="actions"><input id="observerUser" placeholder="@usuario da Live para observar"><button id="startObserver" class="primary">INICIAR OBSERVAÇÃO</button><button id="stopObserver">PARAR</button></div>
       <div id="discoveredList" class="list"></div>
     </section>
-
-    <footer><span>DANIEL LIVE</span><small>Control Center · painel modular</small></footer>
   </main>
   <script type="module" src="./src/app.js"></script>
 </body>
