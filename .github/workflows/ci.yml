@@ -1,0 +1,29 @@
+name: Live Connector CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --ignore-scripts
+      - run: npm run check
+      - name: Block gameplay coupling
+        run: |
+          node - <<'NODE'
+          const fs=require('fs');
+          const paths=['cloud/server.mjs','cloud/tiktok-session.mjs','cloud/protocol.mjs','src/app.js','src/modules/connection.js','src/modules/live-engine.js','src/modules/storage.js','src/modules/ui.js'];
+          const text=paths.map(p=>fs.readFileSync(p,'utf8')).join('\n').toLowerCase();
+          for(const forbidden of ['spawnmob','spawnboss','playerdamage','skillreset','caosmobs','caoscombat','caosskills']){
+            if(text.includes(forbidden)) throw new Error('gameplay coupling detected: '+forbidden);
+          }
+          console.log('LIVE CONNECTOR CLEAN: no gameplay coupling');
+          NODE

@@ -1,0 +1,14 @@
+{
+  "name": "projeto-daniel-live-connector",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node cloud/server.mjs",
+    "cloud": "node cloud/server.mjs",
+    "check": "node --check cloud/protocol.mjs && node --check cloud/tiktok-session.mjs && node --check cloud/server.mjs && node --check src/app.js && node --check src/modules/storage.js && node --check src/modules/connection.js && node --check src/modules/live-engine.js && node --check src/modules/ui.js"
+  },
+  "dependencies": {
+    "tiktok-live-connector": "^2.4.3",
+    "ws": "^8.18.0"
+  }
+}
