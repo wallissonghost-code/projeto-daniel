@@ -15,8 +15,6 @@
       <div class="topActions"><span class="version">PLUS BETA</span><span class="badge" id="cloudBadge"><i></i>DESCONECTADO</span></div>
     </header>
 
-    <nav class="quickNav" aria-label="Navegação"><a href="#connectorSection">Conexão</a><a href="#healthSection">Saúde</a><a href="#engineSection">Eventos</a><a href="#catalogSection">Presentes</a><a href="#rulesSection">Regras</a><a href="#observerSection">Verificação</a></nav>
-
     <section class="hero">
       <div><div class="kicker">LIVE CONNECTOR PLUS</div><h1>Conecte. Escute. Automatize.</h1><p>Um painel universal para transformar eventos da TikTok Live em sinais confiáveis para qualquer aplicativo, jogo, overlay ou automação.</p></div>
       <div class="heroStatus"><span class="pulse"></span><div><small>STATUS GERAL</small><strong id="heroStatusText">Aguardando conector</strong></div></div>
@@ -57,7 +55,7 @@
     </section>
 
     <section class="card" id="catalogSection">
-      <div class="sectionHead"><div><div class="kicker">04 · PRESENTES</div><h2>Catálogo verificado</h2><p class="sectionDesc">Confirma ID, nome e diamantes usando dados recebidos na Live.</p></div><span class="badge" id="catalogCount">0 VERIFICADOS</span></div>
+      <div class="sectionHead"><div><div class="kicker">04 · PRESENTES</div><h2>Catálogo verificado</h2><p class="sectionDesc">Confirma ID, nome, imagem e diamantes cruzando catálogo da sala com eventos reais.</p></div><span class="badge" id="catalogCount">0 VERIFICADOS</span></div>
       <button id="captureCatalog" class="primary full captureBtn">CAPTURAR CATÁLOGO DA LIVE</button>
       <div class="filters"><div class="searchBox"><span>⌕</span><input id="giftSearch" placeholder="Buscar nome ou ID"></div><select id="giftSort"><option value="price">MENOR VALOR</option><option value="name">NOME</option></select></div>
       <div id="giftList" class="list"></div>
@@ -77,7 +75,7 @@
     </section>
 
     <section class="card" id="observerSection">
-      <div class="sectionHead"><div><div class="kicker">06 · VERIFICAÇÃO</div><h2>Presentes ao vivo</h2><p class="sectionDesc">Observe uma conta para descobrir e validar presentes recebidos.</p></div><span class="badge" id="observerBadge">OBSERVADOR OFF</span></div>
+      <div class="sectionHead"><div><div class="kicker">06 · VERIFICAÇÃO</div><h2>Presentes ao vivo</h2><p class="sectionDesc">Usa a sessão principal quando possível; para outra conta, abre uma sessão própria de observação.</p></div><span class="badge" id="observerBadge">OBSERVADOR OFF</span></div>
       <div class="observerRow"><div class="inputShell"><b>@</b><input id="observerUser" autocapitalize="off" placeholder="usuario da Live"></div><button id="startObserver" class="primary">INICIAR</button><button id="stopObserver">PARAR</button></div>
       <div id="discoveredList" class="list"></div>
     </section>
