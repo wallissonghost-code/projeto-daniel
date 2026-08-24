@@ -5,7 +5,8 @@
   "scripts": {
     "start": "node cloud/server.mjs",
     "cloud": "node cloud/server.mjs",
-    "check": "node --check cloud/protocol.mjs && node --check cloud/tiktok-session.mjs && node --check cloud/server.mjs && node --check src/app.js && node --check src/modules/storage.js && node --check src/modules/connection.js && node --check src/modules/live-engine.js && node --check src/modules/ui.js"
+    "test:ai": "node tests/ai-agents.mjs",
+    "check": "node --check cloud/protocol.mjs && node --check cloud/tiktok-session.mjs && node --check cloud/server.mjs && node --check src/app.js && node --check src/modules/storage.js && node --check src/modules/connection.js && node --check src/modules/live-engine.js && node --check src/modules/ui.js && node --check tests/ai-agents.mjs && npm run test:ai"
   },
   "dependencies": {
     "tiktok-live-connector": "^2.4.3",
