@@ -16,12 +16,13 @@ export function classifyTikTokError(error){
 export function normalizeModernConnectError(error){
   const info=classifyTikTokError(error);if(!info.missingRetryAfter)return error;
   const wrapped=new Error(`fetchWebcastSignature compatibility fallback: resposta TikTok sem header retry-after; ${info.message}`);
-  wrapped.name='LivePlusTikTokCompatibilityError';wrapped.code='LIVEPLUS_TIKTOK_MISSING_RETRY_AFTER';wrapped.cause=error;return wrapped;
+  wrapped.name='LivePlatformTikTokCompatibilityError';wrapped.code='TIKTOK_MISSING_RETRY_AFTER';wrapped.cause=error;return wrapped;
 }
 
+// Espelha o comportamento estabilizado no Caos Live: duas tentativas curtas e previsíveis.
+// Rate limit recebe espera maior para não martelar o TikTok.
 export function reconnectDelayMs(attempt,{rateLimited=false}={}){
-  const n=Math.max(1,Math.min(8,Number(attempt)||1));
-  const normal=Math.min(15000,1200*Math.pow(1.65,n-1));
-  if(!rateLimited)return Math.round(normal);
-  return Math.max(30000,Math.min(120000,30000*Math.pow(1.6,n-1)));
+  const n=Math.max(1,Math.min(2,Number(attempt)||1));
+  if(rateLimited)return n===1?30000:60000;
+  return n===1?3000:12000;
 }
