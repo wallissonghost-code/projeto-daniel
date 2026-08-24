@@ -91,7 +91,8 @@ export function likeCountOf(data={}){
 }
 
 export function normalizeGift(data={}){
-  const giftId=data.giftId??data.gift_id??data.gift?.id??deepValue(data,['giftId','gift_id','id'])||null;
+  const rawGiftId=data.giftId??data.gift_id??data.gift?.id??deepValue(data,['giftId','gift_id','id']);
+  const giftId=rawGiftId===''?null:rawGiftId;
   const gift=data.giftName||data.extendedGiftInfo?.name||data.gift?.name||deepValue(data,['giftName','gift_name'])||`gift-${giftId??'unknown'}`;
   const diamondRaw=data.diamondCount??data.diamond_count??data.extendedGiftInfo?.diamondCount??data.extendedGiftInfo?.diamond_count??deepNumber(data,['diamondCount','diamond_count','diamondCost','diamond_cost','cost']);
   return {
@@ -108,8 +109,9 @@ export function normalizeGift(data={}){
 }
 
 export function catalogGift(g={}){
-  const id=g.id??g.giftId??g.gift_id??g.gift?.id??deepValue(g,['giftId','gift_id'])||null;
-  const name=g.name??g.giftName??g.gift_name??g.gift?.name??deepValue(g,['giftName','gift_name','name'])??`gift-${id??'unknown'}`;
+  const rawId=g.id??g.giftId??g.gift_id??g.gift?.id??deepValue(g,['giftId','gift_id']);
+  const id=rawId===''?null:rawId;
+  const name=g.name||g.giftName||g.gift_name||g.gift?.name||deepValue(g,['giftName','gift_name','name'])||`gift-${id??'unknown'}`;
   const diamondRaw=g.diamondCount??g.diamond_count??g.diamondCost??g.cost??g.gift?.diamondCount??deepNumber(g,['diamondCount','diamond_count','diamondCost','diamond_cost','cost']);
   const type=Number(g.type??g.giftType??g.gift_type??g.gift?.type??0)||0;
   return {
