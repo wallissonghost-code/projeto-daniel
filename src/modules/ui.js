@@ -1,6 +1,7 @@
 const $=id=>document.getElementById(id);
-const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[c]));
 const TRIGGER_LABELS={gift:'🎁 Presente específico',giftvalue:'💎 Valor da doação',giftany:'🎁 Qualquer presente',like:'❤️ Curtidas',follow:'➕ Novo seguidor',share:'🔁 Compartilhou a Live',chat:'💬 Comentário'};
+const giftValue=g=>Number(g?.diamondCount)>0?`${Number(g.diamondCount)} 💎`:'valor não identificado';
 export function elements(){return new Proxy({}, {get:(_,k)=>$(k)})}
 export function verifiedCatalog(engine){return engine.catalog.filter(g=>g.verifiedAt&&!g.liveDivergence)}
 export function renderState(engine,client,els){
@@ -13,15 +14,15 @@ export function renderState(engine,client,els){
 }
 export function renderGifts(engine,els){
   const q=(els.giftSearch.value||'').toLowerCase(),sort=els.giftSort.value;let list=verifiedCatalog(engine).filter(g=>!q||`${g.name} ${g.id||''}`.toLowerCase().includes(q));list=[...list].sort(sort==='name'?(a,b)=>a.name.localeCompare(b.name):(a,b)=>(a.diamondCount-b.diamondCount)||a.name.localeCompare(b.name));
-  els.giftList.innerHTML=list.slice(0,100).map(g=>`<div class="item verifiedGift"><div class="giftMeta">${g.icon?`<img class="giftIcon" src="${esc(g.icon)}" alt="">`:'<div class="giftIcon"></div>'}<div class="giftText"><b>${esc(g.name)}</b><small>ID ${esc(g.id||'—')} · ${Number(g.diamondCount)||0} 💎</small><small class="green">✓ VERIFICADO AO VIVO</small></div></div><button data-gift="${esc(g.id||g.name)}">USAR NA REGRA</button></div>`).join('')||'<div class="notice">Nenhum presente verificado ainda. Conecte uma Live para confirmar gifts reais.</div>';
-  els.ruleGift.innerHTML='<option value="">Selecione um verificado</option>'+verifiedCatalog(engine).map(g=>`<option value="${esc(g.id||g.name)}">${esc(g.name)} · ${Number(g.diamondCount)||0} 💎</option>`).join('');
+  els.giftList.innerHTML=list.slice(0,100).map(g=>`<div class="item verifiedGift"><div class="giftMeta">${g.icon?`<img class="giftIcon" src="${esc(g.icon)}" alt="${esc(g.name)}" loading="lazy">`:'<div class="giftIcon giftMissing">?</div>'}<div class="giftText"><b>${esc(g.name)}</b><small>ID ${esc(g.id||'—')} · ${esc(giftValue(g))}</small><small class="green">✓ VERIFICADO AO VIVO</small></div></div><button data-gift="${esc(g.id||g.name)}">USAR NA REGRA</button></div>`).join('')||'<div class="notice">Nenhum presente verificado ainda. Ao conectar a Live, o painel tenta capturar o catálogo detalhado automaticamente.</div>';
+  els.ruleGift.innerHTML='<option value="">Selecione um verificado</option>'+verifiedCatalog(engine).map(g=>`<option value="${esc(g.id||g.name)}">${esc(g.name)} · ${esc(giftValue(g))}</option>`).join('');
 }
 export function renderRules(engine,els){
   els.ruleList.innerHTML=engine.rules.map(r=>`<div class="item"><div class="giftText"><b>${esc(TRIGGER_LABELS[r.trigger]||r.trigger)}</b><small>${r.giftName||r.giftId?`presente ${esc(r.giftName||r.giftId)} · `:''}limite ${r.quantity} · cooldown ${r.cooldown}s</small></div><button data-delete-rule="${esc(r.id)}">EXCLUIR</button></div>`).join('')||'<div class="notice">Nenhuma regra configurada.</div>';
 }
 export function renderDiscovered(engine,els){
-  els.discoveredList.innerHTML=engine.discovered.slice(0,80).map(g=>`<div class="item"><div class="giftMeta">${g.icon?`<img class="giftIcon" src="${esc(g.icon)}" alt="">`:'<div class="giftIcon"></div>'}<div class="giftText"><b>${esc(g.name)}</b><small>ID ${esc(g.id||'—')} · ${Number(g.diamondCount)||0} 💎</small><small class="green">confirmado nesta sessão</small></div></div></div>`).join('')||'<div class="notice">Nenhum presente novo observado.</div>';
+  els.discoveredList.innerHTML=engine.discovered.slice(0,80).map(g=>`<div class="item"><div class="giftMeta">${g.icon?`<img class="giftIcon" src="${esc(g.icon)}" alt="${esc(g.name)}" loading="lazy">`:'<div class="giftIcon giftMissing">?</div>'}<div class="giftText"><b>${esc(g.name)}</b><small>ID ${esc(g.id||'—')} · ${esc(giftValue(g))}</small><small class="green">confirmado nesta sessão · ${Number(g.seen)||1}×</small></div></div></div>`).join('')||'<div class="notice">Nenhum presente novo observado.</div>';
 }
 export function setLiveStatus(els,m){
-  const connected=m.status==='connected',checking=['checking','reconnecting'].includes(m.status);els.healthTikTok.textContent=connected?'ON':checking?'CONECTANDO':'OFF';els.healthBadge.textContent=connected?'SAUDÁVEL':checking?'CONECTANDO':'AGUARDANDO';els.healthBadge.classList.toggle('fail',!connected);els.connectorNotice.textContent=connected?`TikTok conectada em @${m.username||''}`:m.reason||`TikTok: ${m.status||'desconectada'}`;
+  const connected=m.status==='connected',checking=['checking','reconnecting','zombie'].includes(m.status);els.healthTikTok.textContent=connected?'ON':checking?'CONECTANDO':'OFF';els.healthBadge.textContent=connected?'SAUDÁVEL':checking?'RECUPERANDO':'AGUARDANDO';els.healthBadge.classList.toggle('fail',!connected);els.connectorNotice.textContent=connected?`TikTok conectada em @${m.username||''}`:m.reason||`TikTok: ${m.status||'desconectada'}`;
 }
