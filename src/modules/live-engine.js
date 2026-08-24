@@ -15,7 +15,8 @@ export class LiveEngine extends EventTarget{
   onMessage(m){
     if(m.type==='status'&&m.status==='connected'&&!this.stats.startedAt&&!m.observer)this.stats.startedAt=Date.now();
     if(m.type==='gift_catalog')this.mergeCatalog(m.gifts||[],m.capturedAt||Date.now(),false);
-    if(['like','chat','follow','share','gift'].includes(m.type)){this.captureEvent(m);if(!m.observer)this.runRules(m)}
+    const unfinishedStreak=m.type==='gift'&&Number(m.giftType)===1&&m.repeatEnd===false;
+    if(['like','chat','follow','share','gift'].includes(m.type)&&!unfinishedStreak){this.captureEvent(m);if(!m.observer)this.runRules(m)}
     this.emit('message',m);this.emit('state',this.snapshot());
   }
   findGift(id,name){
@@ -34,14 +35,16 @@ export class LiveEngine extends EventTarget{
         verifiedAt:Date.now(),liveVerified:true,liveDivergence:false,
         liveVerifiedCount:(Number(known?.liveVerifiedCount)||0)+Math.max(1,Number(m.count)||1)
       };
-      const existed=Boolean(known);
       this.mergeCatalog([gift],Date.now(),true);
-      if(!existed){
-        const key=gift.id||norm(gift.name);
-        const old=this.discovered.find(g=>(g.id||norm(g.name))===key);
-        const merged={...(old||{}),...gift,diamondCount:gift.diamondCount||old?.diamondCount||0,icon:gift.icon||old?.icon||'',lastSeen:Date.now(),seen:(Number(old?.seen)||0)+Math.max(1,Number(m.count)||1)};
-        this.discovered=[merged,...this.discovered.filter(g=>(g.id||norm(g.name))!==key)].slice(0,500);storage.saveDiscovered(this.discovered);
-      }
+      const key=gift.id||norm(gift.name),old=this.discovered.find(g=>(g.id||norm(g.name))===key);
+      const merged={
+        ...(old||{}),...gift,
+        diamondCount:gift.diamondCount||old?.diamondCount||0,
+        icon:gift.icon||old?.icon||'',
+        lastSeen:Date.now(),firstSeen:old?.firstSeen||Date.now(),seen:(Number(old?.seen)||0)+Math.max(1,Number(m.count)||1),
+        knownCatalog:Boolean(known),lastUser:m.user||old?.lastUser||''
+      };
+      this.discovered=[merged,...this.discovered.filter(g=>(g.id||norm(g.name))!==key)].slice(0,200);storage.saveDiscovered(this.discovered);
     }
   }
   mergeCatalog(incoming,capturedAt=Date.now(),verified=false){
