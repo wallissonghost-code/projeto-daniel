@@ -1,11 +1,5 @@
-# Caos Live2
+# Caos-Live2
 
-Base solo limpa e otimizada do Caos Live.
+Repositório limpo e pronto para um novo projeto.
 
-- Sem multiplayer
-- Sem modo duo
-- Sem skins de player, mobs ou bosses
-- Painel administrativo integrado ao jogo
-- Connector TikTok preservado
-
-> Repositório reconstruído a partir da base do Caos Live, com foco em manutenção, desempenho e administração.
+Estado atual: base zerada intencionalmente em 24/08/2026.
