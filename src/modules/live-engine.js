@@ -43,10 +43,13 @@ export class LiveEngine extends EventTarget{
     const trigger=rule.trigger||'gift';
     const normalized={
       id:rule.id||crypto.randomUUID?.()||String(Date.now()),enabled:rule.enabled!==false,trigger,
-      giftId:trigger==='gift'&&rule.giftId?String(rule.giftId):'',giftName:trigger==='gift'?String(rule.giftName||''):'',
+      giftId:trigger==='gift'&&rule.giftId?String(rule.giftId):'',giftName:trigger==='gift'?String(rule.giftName||''):'',giftIcon:trigger==='gift'?String(rule.giftIcon||''):'',giftValue:trigger==='gift'?Math.max(0,Number(rule.giftValue)||0):0,
       quantity:['gift','giftvalue','like'].includes(trigger)?Math.max(1,Number(rule.quantity)||1):1,
       commentText:trigger==='chat'?String(rule.commentText||'').trim():'',
-      cooldown:Math.max(0,Number(rule.cooldown)||0)
+      cooldown:Math.max(0,Number(rule.cooldown)||0),
+      gameId:String(rule.gameId||''),gameName:String(rule.gameName||''),gameIcon:String(rule.gameIcon||''),
+      actionId:String(rule.actionId||''),actionLabel:String(rule.actionLabel||''),actionIcon:String(rule.actionIcon||''),actionDescription:String(rule.actionDescription||''),
+      actionParams:rule.actionParams&&typeof rule.actionParams==='object'?structuredClone(rule.actionParams):{}
     };
     const i=this.rules.findIndex(r=>r.id===normalized.id);if(i>=0)this.rules[i]=normalized;else this.rules.push(normalized);storage.saveRules(this.rules);this.emit('state',this.snapshot());return normalized;
   }
@@ -63,6 +66,6 @@ export class LiveEngine extends EventTarget{
     return rule.trigger===m.type;
   }
   runRules(m){
-    const now=Date.now();for(const rule of this.rules){if(!this.match(rule,m)||!this.canFire(rule))continue;if(rule.trigger==='like')this.likeProgress.set(rule.id,Math.max(0,(this.likeProgress.get(rule.id)||0)-rule.quantity));const gift=m.type==='gift'?this.giftMeta(m):null;const payload={type:'live.rule',version:1,ruleId:rule.id,trigger:rule.trigger,threshold:rule.quantity,commentText:rule.commentText||'',event:{type:m.type,user:m.user||'',comment:m.comment||'',gift:gift?.name||m.gift||null,giftId:m.giftId||null,count:m.count||1,diamondValue:gift?.unit||0,totalDiamonds:gift?.total||0,verifiedGift:gift?.verified??null,at:now}};this.client.emitAction('live.rule',payload,rule.id);this.emit('automation',{rule,event:m,payload})}
+    const now=Date.now();for(const rule of this.rules){if(!this.match(rule,m)||!this.canFire(rule))continue;if(rule.trigger==='like')this.likeProgress.set(rule.id,Math.max(0,(this.likeProgress.get(rule.id)||0)-rule.quantity));const gift=m.type==='gift'?this.giftMeta(m):null;const payload={type:'live.rule',version:2,ruleId:rule.id,trigger:rule.trigger,threshold:rule.quantity,commentText:rule.commentText||'',game:{id:rule.gameId||'',name:rule.gameName||''},action:{id:rule.actionId||'',label:rule.actionLabel||'',params:rule.actionParams||{}},event:{type:m.type,user:m.user||'',comment:m.comment||'',gift:gift?.name||m.gift||null,giftId:m.giftId||null,count:m.count||1,diamondValue:gift?.unit||0,totalDiamonds:gift?.total||0,verifiedGift:gift?.verified??null,at:now}};this.client.emitAction('live.rule',payload,rule.id);this.emit('automation',{rule,event:m,payload})}
   }
 }
