@@ -1,0 +1,50 @@
+name: Action image previews
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/action-image-previews.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Add image preview support
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p=Path('src/modules/game-bridge.js')
+          s=p.read_text()
+          s=s.replace("icon:String(a?.icon||'🎮'),params:","icon:String(a?.icon||'🎮'),iconImage:String(a?.iconImage||a?.image||''),params:")
+          s=s.replace("preview.innerHTML=`<div class=\"actionIcon\">${esc(action.icon)}</div><div><strong>${esc(action.label)}</strong><small>${esc(action.description||'Ação disponibilizada pelo jogo conectado')}</small></div>`;", "preview.innerHTML=`<div class=\"actionIcon\">${action.iconImage?`<img src=\"${esc(action.iconImage)}\" alt=\"\">`:esc(action.icon)}</div><div><strong>${esc(action.label)}</strong><small>${esc(action.description||'Ação disponibilizada pelo jogo conectado')}</small></div>`;")
+          p.write_text(s)
+
+          p=Path('src/app.js')
+          s=p.read_text()
+          s=s.replace("actionIcon:action?.icon||'',actionDescription:","actionIcon:action?.icon||'',actionIconImage:action?.iconImage||'',actionDescription:")
+          p.write_text(s)
+
+          p=Path('src/modules/ui.js')
+          s=p.read_text()
+          old="<div class=\"automationEmoji\">${esc(r.actionIcon||'🎮')}</div>"
+          new="${r.actionIconImage?`<img class=\"automationActionImage\" src=\"${esc(r.actionIconImage)}\" alt=\"\">`:`<div class=\"automationEmoji\">${esc(r.actionIcon||'🎮')}</div>`}"
+          if old not in s:
+              raise SystemExit('ui action icon block not found')
+          s=s.replace(old,new,1)
+          p.write_text(s)
+
+          p=Path('src/styles.css')
+          s=p.read_text()
+          s += "\n.actionIcon img,.automationActionImage{width:100%;height:100%;object-fit:contain;display:block}.automationActionImage{width:72px;height:72px;border-radius:18px;padding:5px;background:#0d1921;border:1px solid #234653}\n"
+          p.write_text(s)
+          PY
+      - name: Commit
+        run: |
+          git config user.name "ghostzinho"
+          git config user.email "wallissonghost@gmail.com"
+          git add src/modules/game-bridge.js src/app.js src/modules/ui.js src/styles.css
+          git commit -m "ui: suportar preview real das ações do jogo" || exit 0
+          git push
