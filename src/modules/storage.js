@@ -1,5 +1,6 @@
 const PREFIX='daniel.live.plus.v2';
 const keys={settings:`${PREFIX}.settings`,rules:`${PREFIX}.rules`};
+for(const legacy of [`${PREFIX}.catalog`,`${PREFIX}.discovered`]){try{localStorage.removeItem(legacy)}catch{}}
 function read(key,fallback){try{const v=JSON.parse(localStorage.getItem(key));return v??fallback}catch{return fallback}}
 function write(key,value){localStorage.setItem(key,JSON.stringify(value));return value}
 export const storage={
