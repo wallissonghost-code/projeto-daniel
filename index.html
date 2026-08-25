@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="./src/styles.css">
   <link rel="stylesheet" href="./src/diagnostics.css">
   <link rel="stylesheet" href="./src/mobile-fixes.css">
+  <link rel="stylesheet" href="./src/partida.css">
 </head>
 <body>
   <div class="ambient ambientA"></div><div class="ambient ambientB"></div>
@@ -17,7 +18,28 @@
       <div class="topActions"><span class="version">PLUS BETA</span><span class="badge" id="cloudBadge"><i></i>DESCONECTADO</span></div>
     </header>
 
-    <section class="card cardGlow" id="connectorSection">
+    <nav class="viewTabs" aria-label="Áreas do painel">
+      <button class="viewTab" type="button" data-view-tab="match">🎮 PARTIDA</button>
+      <button class="viewTab active" type="button" data-view-tab="live">📡 LIVE</button>
+      <button class="viewTab" type="button" data-view-tab="events">🛰 EVENTOS</button>
+      <button class="viewTab" type="button" data-view-tab="gifts">🎁 PRESENTES</button>
+      <button class="viewTab" type="button" data-view-tab="rules">⚙️ REGRAS</button>
+    </nav>
+
+    <section class="card cardGlow" id="matchSection" data-view="match" hidden>
+      <div class="sectionHead"><div><div class="kicker">PARTIDA · SESSÃO SEGURA</div><h2>Conexão com o jogo</h2><p class="sectionDesc">O painel cria a sessão. Digite o código temporário dentro do jogo para conectar.</p></div><span class="badge" id="matchCodeState"><i></i>SESSÃO OFFLINE</span></div>
+      <div class="matchCodeBox">
+        <div class="matchCodeTop"><div><span>CÓDIGO TEMPORÁRIO</span><div class="matchCode" id="matchCode">—</div></div><div class="matchCodeState" id="matchCodeStateMirror">PAINEL → JOGO</div></div>
+        <div class="matchMeta"><div><span>EXPIRAÇÃO</span><strong id="matchExpires">—</strong></div><div><span>JOGOS CONECTADOS</span><strong id="matchController">0 JOGOS</strong></div><div><span>TRANSPORTE</span><strong id="matchTransport">AGUARDANDO</strong></div></div>
+        <div class="matchActions"><button id="newMatchCode" class="primary">GERAR CÓDIGO DA PARTIDA</button><button id="endMatchSession" class="danger">ENCERRAR SESSÃO</button></div>
+        <div class="matchHint"><b>Como funciona:</b> gere o código aqui, abra o jogo e digite o código nele. Depois da primeira conexão o código é consumido e a sala fica travada para um único jogo. Se a conexão oscilar, o mesmo jogo tem uma janela curta para reconectar.</div>
+      </div>
+      <div class="matchLock"><span>TRAVA DE CONTROLADOR</span><strong id="matchLockState">LIVRE</strong></div>
+      <div class="matchSecurity"><div class="stat"><span>JOGO AUTORIZADO</span><strong id="matchPeer">—</strong><small>Peer interno; não precisa ser exibido no jogo</small></div><div class="stat"><span>POLÍTICA</span><strong>1 PAINEL · 1 JOGO</strong><small>Segundo jogo é recusado enquanto a sessão estiver ocupada</small></div></div>
+      <div class="matchLog" id="matchLog"><div class="matchLogItem">Nenhuma sessão de partida criada ainda.</div></div>
+    </section>
+
+    <section class="card cardGlow" id="connectorSection" data-view="live">
       <div class="sectionHead"><div><div class="kicker">01 · CONEXÃO</div><h2>Seu conector</h2><p class="sectionDesc">Conecte seu WebSocket, sua chave e a conta da Live.</p></div><span class="badge" id="connectorBadge"><i></i>OFFLINE</span></div>
       <div class="connectionGrid">
         <label class="field wideField"><span>WEBSOCKET DO CONECTOR</span><div class="inputShell"><b>WSS</b><input id="endpoint" autocomplete="off" inputmode="url" placeholder="wss://seu-conector.exemplo.com"></div></label>
@@ -28,7 +50,7 @@
       <div class="notice" id="connectorNotice"><span class="noticeDot"></span><span>Nenhum conector configurado neste navegador.</span></div>
     </section>
 
-    <section class="card" id="healthSection">
+    <section class="card" id="healthSection" data-view="live">
       <div class="sectionHead"><div><div class="kicker">02 · SAÚDE</div><h2>Conector + TikTok</h2><p class="sectionDesc">Resumo operacional. Testes e ferramentas ficam isolados no diagnóstico.</p></div><span class="badge fail" id="healthBadge"><i></i>AGUARDANDO</span></div>
       <div class="stats health">
         <div class="stat primaryStat"><span>CONTA</span><strong id="healthAccount">—</strong><small>TikTok</small></div>
@@ -59,7 +81,7 @@
       </div>
     </section>
 
-    <section class="card" id="engineSection">
+    <section class="card" id="engineSection" data-view="events" hidden>
       <div class="sectionHead"><div><div class="kicker">03 · EVENTOS</div><h2>Live Engine</h2><p class="sectionDesc">Eventos universais recebidos da TikTok Live.</p></div><span class="badge purpleBadge" id="engineBadge">OFF</span></div>
       <div class="switchGrid">
         <label class="toggleRow"><div class="toggleIcon">LIVE</div><div class="toggleCopy"><b>CAPTURA AO VIVO</b><small>presentes, valor, curtidas, comentários, seguidores e compartilhamentos</small></div><input id="captureToggle" type="checkbox"><span class="switch"></span></label>
@@ -69,14 +91,14 @@
       <div class="notice eventNotice"><span>ÚLTIMO EVENTO</span><strong id="lastEvent">—</strong></div>
     </section>
 
-    <section class="card" id="catalogSection">
+    <section class="card" id="catalogSection" data-view="gifts" hidden>
       <div class="sectionHead"><div><div class="kicker">04 · PRESENTES</div><h2>Presentes verificados</h2><p class="sectionDesc">Imagem, nome, valor e confirmação. O ID permanece interno.</p></div><span class="badge" id="catalogCount">0 VERIFICADOS</span></div>
       <button id="captureCatalog" class="primary full captureBtn">ATUALIZAR METADADOS DA LIVE</button>
       <div class="filters"><div class="searchBox"><span>⌕</span><input id="giftSearch" placeholder="Buscar presente"></div><select id="giftSort"><option value="price">MENOR VALOR</option><option value="name">NOME</option></select></div>
       <div id="giftList" class="list"></div>
     </section>
 
-    <section class="card" id="rulesSection">
+    <section class="card" id="rulesSection" data-view="rules" hidden>
       <div class="sectionHead"><div><div class="kicker">05 · REGRAS</div><h2>Gatilhos universais</h2><p class="sectionDesc">Detecta eventos e emite pacotes normalizados.</p></div><span class="badge purpleBadge">UNIVERSAL</span></div>
       <div class="infoBanner"><b>EVENTOS DISPONÍVEIS</b><span>Presente específico · valor mínimo · qualquer presente · curtidas · seguidor · compartilhamento · comentário</span></div>
       <div class="grid2 formGrid">
@@ -89,7 +111,7 @@
       <div id="ruleList" class="list compact"></div>
     </section>
 
-    <section class="card" id="observerSection" hidden>
+    <section class="card" id="observerSection" data-view="live" hidden>
       <div class="sectionHead"><div><div class="kicker">FERRAMENTA TÉCNICA</div><h2>Verificador de presentes ao vivo</h2><p class="sectionDesc">Ferramenta avançada preservada para manutenção.</p></div><span class="badge" id="observerBadge">OBSERVADOR OFF</span></div>
       <div class="observerRow"><div class="inputShell"><b>@</b><input id="observerUser" autocapitalize="off" placeholder="usuario da Live"></div><button id="startObserver" class="primary">INICIAR</button><button id="stopObserver">PARAR</button></div>
       <div id="discoveredList" class="list"></div>
@@ -97,6 +119,8 @@
 
     <footer><span>LIVE+ CONNECTOR</span><small>Universal · modular · independente de gameplay</small></footer>
   </main>
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <script src="./src/partida.js"></script>
   <script type="module" src="./src/app.js"></script>
 </body>
 </html>
