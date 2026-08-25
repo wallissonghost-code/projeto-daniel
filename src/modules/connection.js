@@ -4,7 +4,7 @@ export class ConnectorClient extends EventTarget{
   validateEndpoint(endpoint){
     const value=String(endpoint||'').trim();
     if(!value)throw new Error('Informe o endereço WebSocket do conector.');
-    let url;try{url=new URL(value)}catch{throw new Error('Endpoint inválido. Use ws:// ou wss://.')} 
+    let url;try{url=new URL(value)}catch{throw new Error('Endpoint inválido. Use ws:// ou wss://.')}
     if(!['ws:','wss:'].includes(url.protocol))throw new Error('O endpoint precisa começar com ws:// ou wss://.');
     if(location?.protocol==='https:'&&url.protocol==='ws:')throw new Error('Em uma página HTTPS use wss://, não ws://.');
     return url.toString();
@@ -40,9 +40,6 @@ export class ConnectorClient extends EventTarget{
   startLive(username){const u=String(username||'').trim().replace(/^@/,'');if(!u){this.emit('error',{message:'Informe a conta @ da Live.'});return false}return this.send({type:'connect',username:u})}
   stopLive(){return this.send({type:'disconnect'})}
   simulateTikTokDrop(){return this.send({type:'diagnostic_simulate_tiktok_drop',diagnostic:true})}
-  captureCatalog(username){return this.send({type:'giftcatalog',username:String(username||'').trim().replace(/^@/,'')})}
-  observe(username){return this.send({type:'observe',username:String(username||'').trim().replace(/^@/,'')})}
-  stopObserve(){return this.send({type:'unobserve'})}
   ping(){return this.send({type:'ping'})}
   emitAction(action,payload,id=crypto.randomUUID?.()||String(Date.now())){return this.send({type:'emit_action',id,action,payload})}
   disconnect(){try{this.ws?.close()}catch{}this.ws=null;this.connected=false;this.authenticated=false;this.lastError=''}
