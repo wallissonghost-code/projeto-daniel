@@ -2,41 +2,30 @@ import {ConnectorClient} from './modules/connection.js';
 import {LiveEngine} from './modules/live-engine.js';
 import {elements,renderState,renderGifts,setLiveStatus} from './modules/ui.js';
 import {LiveDiagnostics} from './modules/diagnostics.js';
+import {GameBridge} from './modules/game-bridge.js';
 
 const els=elements(),client=new ConnectorClient(),engine=new LiveEngine(client);
-const diagnostics=new LiveDiagnostics(client,els);
+const diagnostics=new LiveDiagnostics(client,els),gameBridge=new GameBridge();
 const settings=engine.settings;
 let editingRuleId='';
 els.endpoint.value=settings.endpoint||'';els.accessKey.value=settings.key||'';els.username.value=settings.username||'';
+gameBridge.mount(els);
 
 function persist(){engine.saveSettings({endpoint:els.endpoint.value.trim(),key:els.accessKey.value,username:els.username.value.trim().replace(/^@/,'')})}
 function notice(text,tone='neutral'){els.connectorNotice.dataset.tone=tone;els.connectorNotice.innerHTML=`<span class="noticeDot"></span><span>${String(text)}</span>`}
 function redraw(){renderState(engine,client,els);diagnostics.render()}
 function requireConnector(){if(!client.connected){notice('Conecte seu WebSocket antes de iniciar a Live.','error');return false}if(!client.authenticated){notice('O WebSocket abriu, mas a autenticação ainda não foi confirmada.','error');return false}return true}
 function setFieldVisible(field,visible){if(field)field.hidden=!visible}
-function syncRuleForm(){
-  const trigger=els.ruleTrigger.value;
-  setFieldVisible(els.ruleGiftField,trigger==='gift');
-  setFieldVisible(els.ruleQuantityField,['gift','giftvalue','like'].includes(trigger));
-  setFieldVisible(els.ruleCommentField,trigger==='chat');
-  if(trigger==='gift')els.ruleQuantityLabel.textContent='QUANTIDADE DO PRESENTE';
-  else if(trigger==='giftvalue')els.ruleQuantityLabel.textContent='VALOR MÍNIMO (💎)';
-  else if(trigger==='like')els.ruleQuantityLabel.textContent='QUANTIDADE DE CURTIDAS';
-  els.saveRule.textContent=editingRuleId?'SALVAR ALTERAÇÕES':'+ SALVAR REGRA';
-  els.cancelRuleEdit.hidden=!editingRuleId;
-}
-function resetRuleForm(){editingRuleId='';els.ruleTrigger.value='gift';els.ruleGift.value='';els.ruleQuantity.value='1';els.ruleCommentText.value='';els.ruleCooldown.value='2';syncRuleForm()}
-function editRule(id){
-  const rule=engine.rules.find(r=>r.id===id);if(!rule)return;
-  editingRuleId=rule.id;els.ruleTrigger.value=rule.trigger;els.ruleGift.value=rule.giftId||rule.giftName||'';els.ruleQuantity.value=rule.quantity||1;els.ruleCommentText.value=rule.commentText||'';els.ruleCooldown.value=rule.cooldown??2;syncRuleForm();els.rulesSection.scrollIntoView({behavior:'smooth',block:'start'});
-}
-
-async function loadMasterCatalog(){
-  try{const response=await fetch('./data/verified-gifts.json',{cache:'no-store'});if(!response.ok)throw new Error(`HTTP ${response.status}`);const data=await response.json(),gifts=Array.isArray(data?.gifts)?data.gifts:[];engine.setMasterCatalog(gifts)}
-  catch(error){console.warn('Master gift catalog unavailable',error);engine.setMasterCatalog([])}
-}
+function syncRuleForm(){const trigger=els.ruleTrigger.value;setFieldVisible(els.ruleGiftField,trigger==='gift');setFieldVisible(els.ruleQuantityField,['gift','giftvalue','like'].includes(trigger));setFieldVisible(els.ruleCommentField,trigger==='chat');if(trigger==='gift')els.ruleQuantityLabel.textContent='QUANTIDADE DO PRESENTE';else if(trigger==='giftvalue')els.ruleQuantityLabel.textContent='VALOR MÍNIMO (💎)';else if(trigger==='like')els.ruleQuantityLabel.textContent='QUANTIDADE DE CURTIDAS';els.saveRule.textContent=editingRuleId?'SALVAR ALTERAÇÕES':'+ SALVAR REGRA';els.cancelRuleEdit.hidden=!editingRuleId;renderGiftPreview()}
+function renderGiftPreview(){let p=document.getElementById('ruleGiftPreview');if(!p&&els.ruleGiftField){p=document.createElement('div');p.id='ruleGiftPreview';p.className='selectedGiftPreview';els.ruleGiftField.insertAdjacentElement('afterend',p)}const gift=engine.catalog.find(g=>String(g.id||g.name)===els.ruleGift.value);if(!p)return;p.hidden=els.ruleTrigger.value!=='gift'||!gift;p.innerHTML=gift?`${gift.icon?`<img src="${gift.icon}" alt="">`:'<div class="giftMissing">?</div>'}<div><strong>${gift.name}</strong><small>${Number(gift.diamondCount)||0} 💎 · CATÁLOGO MESTRE</small></div>`:''}
+function resetRuleForm(){editingRuleId='';els.ruleTrigger.value='gift';els.ruleGift.value='';els.ruleQuantity.value='1';els.ruleCommentText.value='';els.ruleCooldown.value='2';syncRuleForm();gameBridge.render(els)}
+function editRule(id){const rule=engine.rules.find(r=>r.id===id);if(!rule)return;editingRuleId=rule.id;els.ruleTrigger.value=rule.trigger;els.ruleGift.value=rule.giftId||rule.giftName||'';els.ruleQuantity.value=rule.quantity||1;els.ruleCommentText.value=rule.commentText||'';els.ruleCooldown.value=rule.cooldown??2;syncRuleForm();gameBridge.render(els,rule.actionId,rule.actionParams||{});els.rulesSection.scrollIntoView({behavior:'smooth',block:'start'})}
+async function loadMasterCatalog(){try{const response=await fetch('./data/verified-gifts.json',{cache:'no-store'});if(!response.ok)throw new Error(`HTTP ${response.status}`);const data=await response.json(),gifts=Array.isArray(data?.gifts)?data.gifts:[];engine.setMasterCatalog(gifts)}catch(error){console.warn('Master gift catalog unavailable',error);engine.setMasterCatalog([])}}
 
 engine.addEventListener('state',redraw);
+engine.addEventListener('automation',e=>{const {rule,payload}=e.detail||{};if(rule?.actionId)gameBridge.send(rule,payload?.event)});
+gameBridge.addEventListener('manifest',e=>{gameBridge.render(els);notice(`🎮 ${e.detail.name} conectado · ${e.detail.actions.length} ações disponíveis.`,'ok')});
+gameBridge.addEventListener('disconnected',()=>gameBridge.render(els));
 client.addEventListener('cloud',e=>{if(e.detail.online&&e.detail.authenticated)notice('Conector autenticado e pronto.','ok');else if(e.detail.online)notice('WebSocket aberto. Validando chave…');else if(e.detail.error)notice(e.detail.error,'error');redraw()});
 client.addEventListener('status',e=>{const m=e.detail;setLiveStatus(els,m);if(m.status==='connected')notice(`TikTok conectada em @${String(m.username||els.username.value).replace(/^@/,'')}.`,'ok')});
 client.addEventListener('error',e=>notice(e.detail.message||'Erro no conector','error'));
@@ -46,31 +35,17 @@ els.connectCloud.onclick=async()=>{persist();const endpoint=els.endpoint.value.t
 els.disconnectCloud.onclick=()=>{client.disconnect();notice('Conector desconectado.');redraw()};
 els.connectLive.onclick=()=>{persist();if(!requireConnector())return;const user=els.username.value.trim();if(!user){notice('Informe a conta @ da TikTok Live.','error');els.username.focus();return}engine.resetSession();if(!client.startLive(user))notice('Não foi possível enviar o comando de conexão da Live.','error');else notice(`Solicitando conexão com ${user.startsWith('@')?user:'@'+user}…`)};
 els.stopLive.onclick=()=>{if(!requireConnector())return;client.stopLive();notice('Comando para parar a Live enviado.')};
-els.captureToggle.onchange=()=>engine.saveSettings({capture:els.captureToggle.checked});
-els.automationToggle.onchange=()=>engine.saveSettings({automation:els.automationToggle.checked});
+els.captureToggle.onchange=()=>engine.saveSettings({capture:els.captureToggle.checked});els.automationToggle.onchange=()=>engine.saveSettings({automation:els.automationToggle.checked});
 els.giftSearch.oninput=()=>renderGifts(engine,els);els.giftSort.onchange=()=>renderGifts(engine,els);
 els.giftList.onclick=e=>{const b=e.target.closest('[data-gift]');if(!b)return;editingRuleId='';els.ruleGift.value=b.dataset.gift;els.ruleTrigger.value='gift';syncRuleForm();els.rulesSection?.scrollIntoView({behavior:'smooth',block:'start'})};
-els.ruleTrigger.onchange=syncRuleForm;
-els.cancelRuleEdit.onclick=resetRuleForm;
-els.saveRule.onclick=()=>{
-  const trigger=els.ruleTrigger.value,gift=engine.catalog.find(g=>String(g.id||g.name)===els.ruleGift.value);
-  if(trigger==='gift'&&!gift){els.ruleGift.focus();return}
-  if(trigger==='chat'&&!els.ruleCommentText.value.trim()){els.ruleCommentText.focus();return}
-  engine.saveRule({id:editingRuleId||undefined,trigger,giftId:gift?.id||'',giftName:gift?.name||'',quantity:els.ruleQuantity.value,commentText:els.ruleCommentText.value,cooldown:els.ruleCooldown.value});
-  resetRuleForm();
-};
-els.ruleList.onclick=e=>{const edit=e.target.closest('[data-edit-rule]'),del=e.target.closest('[data-delete-rule]');if(edit)editRule(edit.dataset.editRule);if(del){if(editingRuleId===del.dataset.deleteRule)resetRuleForm();engine.deleteRule(del.dataset.deleteRule)}};
+els.ruleGift.onchange=renderGiftPreview;els.ruleTrigger.onchange=syncRuleForm;els.cancelRuleEdit.onclick=resetRuleForm;
+document.addEventListener('change',e=>{if(e.target?.id==='ruleAction')gameBridge.renderAction(e.target.value,{})});
+els.saveRule.onclick=()=>{const trigger=els.ruleTrigger.value,gift=engine.catalog.find(g=>String(g.id||g.name)===els.ruleGift.value),action=gameBridge.getAction(document.getElementById('ruleAction')?.value);if(trigger==='gift'&&!gift){els.ruleGift.focus();return}if(trigger==='chat'&&!els.ruleCommentText.value.trim()){els.ruleCommentText.focus();return}if(gameBridge.manifest&&!action){document.getElementById('ruleAction')?.focus();return}engine.saveRule({id:editingRuleId||undefined,trigger,giftId:gift?.id||'',giftName:gift?.name||'',giftIcon:gift?.icon||'',giftValue:gift?.diamondCount||0,quantity:els.ruleQuantity.value,commentText:els.ruleCommentText.value,cooldown:els.ruleCooldown.value,gameId:gameBridge.manifest?.gameId||'',gameName:gameBridge.manifest?.name||'',gameIcon:gameBridge.manifest?.icon||'',actionId:action?.id||'',actionLabel:action?.label||'',actionIcon:action?.icon||'',actionDescription:action?.description||'',actionParams:gameBridge.readParams()});resetRuleForm()};
+els.ruleList.onclick=e=>{const edit=e.target.closest('[data-edit-rule]'),del=e.target.closest('[data-delete-rule]'),test=e.target.closest('[data-test-rule]');if(edit)editRule(edit.dataset.editRule);if(test){const r=engine.rules.find(x=>x.id===test.dataset.testRule);if(r?.actionId){const ok=gameBridge.send(r,{type:'manual_test',user:'painel'});notice(ok?'🧪 Comando de teste enviado ao jogo.':'Jogo não está conectado para testar.',ok?'ok':'error')}}if(del){if(editingRuleId===del.dataset.deleteRule)resetRuleForm();engine.deleteRule(del.dataset.deleteRule)}};
 
-els.toggleDiagnostics.onclick=()=>{const opening=els.diagnosticsPanel.hidden;els.diagnosticsPanel.hidden=!opening;els.toggleDiagnostics.setAttribute('aria-expanded',String(opening));els.toggleDiagnostics.querySelector('b').textContent=opening?'−':'+';if(opening){diagnostics.render();setTimeout(()=>els.diagnosticsPanel.scrollIntoView({behavior:'smooth',block:'nearest'}),50)}};
-els.diagClear.onclick=()=>diagnostics.clear();
-els.diagPing.onclick=()=>{if(!requireConnector())return;const before=client.lastPong;els.diagPing.disabled=true;els.diagPing.textContent='TESTANDO…';diagnostics.log('HEARTBEAT MANUAL','Ping enviado ao Connector','neutral');client.ping();setTimeout(()=>{const ok=client.lastPong>before;diagnostics.log(ok?'HEARTBEAT OK':'HEARTBEAT SEM RESPOSTA',ok?`pong ${new Date(client.lastPong).toLocaleTimeString()}`:'nenhum pong novo em 2s',ok?'ok':'error');diagnostics.render();els.diagPing.disabled=false;els.diagPing.textContent='TESTAR HEARTBEAT'},2000)};
-els.simulateTikTokDrop.onclick=()=>{if(!requireConnector())return;diagnostics.log('TESTE CONTROLADO','Solicitando queda intencional da sessão TikTok','warn');diagnostics.render();if(!client.simulateTikTokDrop())notice('Não foi possível enviar o teste de queda.','error')};
-
+els.toggleDiagnostics.onclick=()=>{const opening=els.diagnosticsPanel.hidden;els.diagnosticsPanel.hidden=!opening;els.toggleDiagnostics.setAttribute('aria-expanded',String(opening));els.toggleDiagnostics.querySelector('b').textContent=opening?'−':'+';if(opening){diagnostics.render();setTimeout(()=>els.diagnosticsPanel.scrollIntoView({behavior:'smooth',block:'nearest'}),50)}};els.diagClear.onclick=()=>diagnostics.clear();els.diagPing.onclick=()=>{if(!requireConnector())return;const before=client.lastPong;els.diagPing.disabled=true;els.diagPing.textContent='TESTANDO…';diagnostics.log('HEARTBEAT MANUAL','Ping enviado ao Connector','neutral');client.ping();setTimeout(()=>{const ok=client.lastPong>before;diagnostics.log(ok?'HEARTBEAT OK':'HEARTBEAT SEM RESPOSTA',ok?`pong ${new Date(client.lastPong).toLocaleTimeString()}`:'nenhum pong novo em 2s',ok?'ok':'error');diagnostics.render();els.diagPing.disabled=false;els.diagPing.textContent='TESTAR HEARTBEAT'},2000)};els.simulateTikTokDrop.onclick=()=>{if(!requireConnector())return;diagnostics.log('TESTE CONTROLADO','Solicitando queda intencional da sessão TikTok','warn');diagnostics.render();if(!client.simulateTikTokDrop())notice('Não foi possível enviar o teste de queda.','error')};
 els.testConnector.onclick=async()=>{persist();const endpoint=els.endpoint.value.trim();if(!endpoint){notice('Informe o WebSocket para testar o Connector.','error');els.endpoint.focus();return}const diagnostic=new ConnectorClient();els.testConnector.disabled=true;els.testConnector.textContent='TESTANDO…';notice('Diagnóstico: WebSocket → autenticação → heartbeat. Nenhuma Live será aberta.');try{await diagnostic.connect(endpoint,els.accessKey.value);const started=performance.now();await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('Connector autenticou, mas não respondeu ao heartbeat.')),3500);diagnostic.addEventListener('pong',()=>{clearTimeout(timer);resolve()},{once:true});if(!diagnostic.ping()){clearTimeout(timer);reject(new Error('Não foi possível enviar o heartbeat.'))}});const latency=Math.max(1,Math.round(performance.now()-started));diagnostics.log('TESTE DO CONNECTOR OK',`autenticação OK · heartbeat ${latency} ms`,'ok');notice(`✅ Connector OK · autenticação OK · heartbeat ${latency} ms`,'ok')}catch(error){diagnostics.log('TESTE DO CONNECTOR FALHOU',error?.message||String(error),'error');notice(`❌ Diagnóstico falhou: ${error?.message||error}`,'error')}finally{diagnostic.disconnect();diagnostics.render();els.testConnector.disabled=false;els.testConnector.textContent='TESTAR'}};
-
 els.testPanel.onclick=async()=>{const originalAutomation=engine.settings.automation,originalCapture=engine.settings.capture;engine.saveSettings({capture:true,automation:true});engine.resetSession();notice('Simulação local: testando interface, eventos e regras sem TikTok e sem Render.','ok');const samples=[{type:'status',status:'connected',username:'liveplus_teste'},{type:'like',user:'luna.qa',count:7},{type:'chat',user:'nexus.qa',comment:'teste live+'},{type:'follow',user:'sentinel.qa'},{type:'share',user:'luna.qa'},{type:'gift',user:'nexus.qa',gift:'Rose',giftId:'5655',diamondCount:1,count:2,icon:''}];for(const event of samples){engine.onMessage(event);await new Promise(r=>setTimeout(r,160))}setLiveStatus(els,{status:'connected',username:'liveplus_teste'});diagnostics.log('SIMULAÇÃO DO PAINEL OK','interface, eventos e regras responderam localmente','ok');diagnostics.render();notice('✅ Simulação concluída. Interface, eventos e regras responderam sem abrir Live.','ok');engine.saveSettings({automation:originalAutomation,capture:originalCapture})};
 
 setInterval(()=>{if(client.connected)client.ping();const started=engine.stats.startedAt;if(started){const sec=Math.floor((Date.now()-started)/1000),m=Math.floor(sec/60),s=sec%60;els.duration.textContent=`${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`}redraw()},1000);
-await loadMasterCatalog();
-resetRuleForm();
-redraw();
+await loadMasterCatalog();resetRuleForm();gameBridge.render(els);redraw();
