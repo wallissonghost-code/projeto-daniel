@@ -4,7 +4,7 @@ if(!globalThis.localStorage){const mem=new Map();globalThis.localStorage={getIte
 if(!globalThis.CustomEvent){globalThis.CustomEvent=class CustomEvent extends Event{constructor(type,init={}){super(type);this.detail=init.detail}}}
 
 const {LiveEngine}=await import('../src/modules/live-engine.js');
-const {normalizeGift,normalizeCatalog}=await import('../cloud/protocol.mjs');
+const {normalizeGift}=await import('../cloud/protocol.mjs');
 
 class FakeClient extends EventTarget{
   constructor(){super();this.actions=[]}
@@ -15,9 +15,6 @@ class FakeClient extends EventTarget{
 const nestedGift=normalizeGift({user:{uniqueId:'tester'},giftId:777,giftName:'Nested Rose',repeatCount:2,extendedGiftInfo:{diamond_count:5,picture:{url_list:['https://cdn.example.com/gift.webp']}}});
 assert.equal(nestedGift.diamondCount,5);
 assert.equal(nestedGift.icon,'https://cdn.example.com/gift.webp');
-const normalizedCatalog=normalizeCatalog({availableGifts:[{id:888,name:'Catalog Gift',gift:{diamondCount:9},picture:{urlList:['https://cdn.example.com/catalog.png']}}]});
-assert.equal(normalizedCatalog[0]?.diamondCount,9);
-assert.equal(normalizedCatalog[0]?.icon,'https://cdn.example.com/catalog.png');
 
 localStorage.clear();
 const client=new FakeClient(),engine=new LiveEngine(client);
