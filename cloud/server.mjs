@@ -38,6 +38,7 @@ wss.on('connection',ws=>{
     if(!authenticated)return safeSend(ws,{type:'error',message:'Chave do conector inválida.'});
     if(m.type==='connect')return session.connect(m.username);
     if(m.type==='disconnect')return session.disconnect();
+    if(m.type==='diagnostic_drop_tiktok')return session.simulateUnexpectedDrop();
     if(m.type==='ping')return safeSend(ws,session.ping());
     if(m.type==='observe')return observe(ws,m.username)||safeSend(ws,{type:'observe',ok:false,message:'Informe um usuário.'});
     if(m.type==='unobserve'){unobserve(ws);return safeSend(ws,{type:'observe',ok:true,stopped:true})}
