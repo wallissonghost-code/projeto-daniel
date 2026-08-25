@@ -1,6 +1,6 @@
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[c]));
-const TRIGGER_LABELS={gift:'🎁 Presente específico',giftvalue:'💎 Valor da doação',giftany:'🎁 Qualquer presente',like:'❤️ Curtidas',follow:'➕ Novo seguidor',share:'🔁 Compartilhou a Live',chat:'💬 Comentário'};
+const TRIGGER_LABELS={gift:'🎁 Presente específico',giftvalue:'💎 Valor da doação',giftany:'🎁 Qualquer presente verificado',like:'❤️ Curtidas',follow:'➕ Novo seguidor',share:'🔁 Compartilhou a Live',chat:'💬 Comentário'};
 const giftValue=g=>Number(g?.diamondCount)>0?`${Number(g.diamondCount)} 💎`:'valor não identificado';
 const ageLabel=at=>{if(!at)return'—';const s=Math.max(0,Math.floor((Date.now()-at)/1000));return s<2?'AGORA':s<60?`HÁ ${s}s`:s<3600?`HÁ ${Math.floor(s/60)}min`:`HÁ ${Math.floor(s/3600)}h`};
 let lastGiftRenderKey='';
@@ -31,8 +31,18 @@ export function renderGifts(engine,els){
   els.giftList.innerHTML=list.slice(0,100).map(g=>`<div class="item verifiedGift"><div class="giftMeta">${g.icon?`<img class="giftIcon" src="${esc(g.icon)}" alt="${esc(g.name)}" loading="lazy" decoding="async">`:'<div class="giftIcon giftMissing">?</div>'}<div class="giftText"><b>${esc(g.name)}</b><small>${esc(giftValue(g))}</small><small class="green">✓ CATÁLOGO MESTRE</small></div></div><button data-gift="${esc(g.id||g.name)}">USAR NA REGRA</button></div>`).join('')||'<div class="notice">Nenhum presente verificado disponível.</div>';
   els.ruleGift.innerHTML='<option value="">Selecione um verificado</option>'+verifiedCatalog(engine).map(g=>`<option value="${esc(g.id||g.name)}">${esc(g.name)} · ${esc(giftValue(g))}</option>`).join('');
 }
+function ruleSummary(r){
+  if(r.trigger==='gift')return `presente ${r.giftName||'não selecionado'} · quantidade ${r.quantity}`;
+  if(r.trigger==='giftvalue')return `mínimo ${r.quantity} 💎`;
+  if(r.trigger==='giftany')return 'qualquer presente do Catálogo Mestre';
+  if(r.trigger==='like')return `${r.quantity} curtida${r.quantity===1?'':'s'}`;
+  if(r.trigger==='chat')return r.commentText?`comentário contém “${r.commentText}”`:'qualquer comentário';
+  if(r.trigger==='follow')return 'qualquer novo seguidor';
+  if(r.trigger==='share')return 'qualquer compartilhamento';
+  return `limite ${r.quantity}`;
+}
 export function renderRules(engine,els){
-  els.ruleList.innerHTML=engine.rules.map(r=>`<div class="item"><div class="giftText"><b>${esc(TRIGGER_LABELS[r.trigger]||r.trigger)}</b><small>${r.giftName?`presente ${esc(r.giftName)} · `:''}limite ${r.quantity} · cooldown ${r.cooldown}s</small></div><button data-delete-rule="${esc(r.id)}">EXCLUIR</button></div>`).join('')||'<div class="notice">Nenhuma regra configurada.</div>';
+  els.ruleList.innerHTML=engine.rules.map(r=>`<div class="item ruleItem"><div class="giftText"><b>${esc(TRIGGER_LABELS[r.trigger]||r.trigger)}</b><small>${esc(ruleSummary(r))} · cooldown ${Number(r.cooldown)||0}s</small></div><div class="ruleActions"><button data-edit-rule="${esc(r.id)}">EDITAR</button><button class="dangerGhost" data-delete-rule="${esc(r.id)}">EXCLUIR</button></div></div>`).join('')||'<div class="notice">Nenhuma regra configurada.</div>';
 }
 export function setLiveStatus(els,m){
   const connected=m.status==='connected',checking=['checking','reconnecting','zombie'].includes(m.status);
