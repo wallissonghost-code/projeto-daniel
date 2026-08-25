@@ -22,12 +22,14 @@ function cleanupPeer(){clearInterval(timer);timer=null;try{activeConn?.close()}c
 function reject(conn,reason='SALA EM USO'){try{conn.on('open',()=>{try{conn.send({type:'session_reject',reason})}catch{}setTimeout(()=>{try{conn.close()}catch{}},120)})}catch{try{conn.close()}catch{}}log(`Conexão recusada · ${reason}`,'warn')}
 function acceptConnection(conn){
   const incoming=String(conn.peer||'');
-  if(activeConn?.open)return reject(conn,'SALA EM USO');
+  const reconnectingSameGame=!!(activeConn?.open&&lockedPeer&&incoming===lockedPeer);
+  if(activeConn?.open&&!reconnectingSameGame)return reject(conn,'SALA EM USO');
   if(lockedPeer&&incoming!==lockedPeer&&Date.now()<graceUntil)return reject(conn,'SESSÃO RESERVADA PARA O JOGO ANTERIOR');
+  if(reconnectingSameGame){const stale=activeConn;activeConn=null;try{stale.close()}catch{}log('Reconexão legítima detectada · substituindo conexão anterior.','ok')}
   activeConn=conn;lockedPeer=incoming||lockedPeer;sessionToken=sessionToken||randomToken();
-  conn.on('open',()=>{expiresAt=0;graceUntil=0;try{conn.send({type:'session_accept',token:sessionToken,exclusive:true,transport:'webrtc',protocol:'liveplus-match-v1',manifestProtocol:'liveplus-game-manifest-v1'})}catch{}log('Jogo conectado. Código consumido e sessão travada.','ok');render()});
+  conn.on('open',()=>{expiresAt=0;graceUntil=0;try{conn.send({type:'session_accept',token:sessionToken,exclusive:true,transport:'webrtc',protocol:'liveplus-match-v1',manifestProtocol:'liveplus-game-manifest-v1'})}catch{}log(reconnectingSameGame?'Jogo reconectado e sessão preservada.':'Jogo conectado. Código consumido e sessão travada.','ok');render()});
   conn.on('data',data=>{if(!data||typeof data!=='object')return;if(data.type==='session_hello'&&data.token&&data.token!==sessionToken){reject(conn,'TOKEN DE SESSÃO INVÁLIDO');return}if(data.type==='game_manifest'){manifest=data.manifest||data;window.dispatchEvent(new CustomEvent('liveplus-game-manifest',{detail:manifest}));log(`Manifesto recebido · ${manifest?.name||manifest?.gameName||'jogo'} · ${(manifest?.actions||[]).length} ações`,'ok');render();return}if(data.type==='state')window.dispatchEvent(new CustomEvent('liveplus-game-state',{detail:data}));if(data.type==='event')window.dispatchEvent(new CustomEvent('liveplus-game-event',{detail:data}))});
-  conn.on('close',()=>{if(activeConn===conn)activeConn=null;manifest=null;window.dispatchEvent(new CustomEvent('liveplus-game-disconnected'));graceUntil=Date.now()+RECONNECT_GRACE_MS;log('Jogo desconectou · vaga reservada por 30s para reconexão.','warn');render()});
+  conn.on('close',()=>{if(activeConn===conn){activeConn=null;manifest=null;window.dispatchEvent(new CustomEvent('liveplus-game-disconnected'));graceUntil=Date.now()+RECONNECT_GRACE_MS;log('Jogo desconectou · vaga reservada por 30s para reconexão.','warn');render()}});
   conn.on('error',()=>log('Oscilação na conexão WebRTC da Partida.','error'));
 }
 function startSession(){
