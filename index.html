@@ -84,7 +84,7 @@
     <section class="card" id="engineSection" data-view="events" hidden>
       <div class="sectionHead"><div><div class="kicker">03 · EVENTOS</div><h2>Live Engine</h2><p class="sectionDesc">Eventos universais recebidos da TikTok Live.</p></div><span class="badge purpleBadge" id="engineBadge">OFF</span></div>
       <div class="switchGrid">
-        <label class="toggleRow"><div class="toggleIcon">LIVE</div><div class="toggleCopy"><b>CAPTURA AO VIVO</b><small>presentes, valor, curtidas, comentários, seguidores e compartilhamentos</small></div><input id="captureToggle" type="checkbox"><span class="switch"></span></label>
+        <label class="toggleRow"><div class="toggleIcon">LIVE</div><div class="toggleCopy"><b>CAPTURA AO VIVO</b><small>contadores e último evento da sessão</small></div><input id="captureToggle" type="checkbox"><span class="switch"></span></label>
         <label class="toggleRow"><div class="toggleIcon">RULE</div><div class="toggleCopy"><b>REGRAS</b><small>dispara eventos universais normalizados</small></div><input id="automationToggle" type="checkbox"><span class="switch"></span></label>
       </div>
       <div class="stats eventStats"><div class="stat"><span>LIKES</span><strong id="likes">0</strong></div><div class="stat"><span>COMENT.</span><strong id="chat">0</strong></div><div class="stat"><span>FOLLOW</span><strong id="follow">0</strong></div><div class="stat"><span>SHARE</span><strong id="share">0</strong></div><div class="stat"><span>GIFTS</span><strong id="gift">0</strong></div></div>
@@ -92,29 +92,22 @@
     </section>
 
     <section class="card" id="catalogSection" data-view="gifts" hidden>
-      <div class="sectionHead"><div><div class="kicker">04 · PRESENTES</div><h2>Presentes verificados</h2><p class="sectionDesc">Imagem, nome, valor e confirmação. O ID permanece interno.</p></div><span class="badge" id="catalogCount">0 VERIFICADOS</span></div>
-      <button id="captureCatalog" class="primary full captureBtn">ATUALIZAR METADADOS DA LIVE</button>
+      <div class="sectionHead"><div><div class="kicker">04 · PRESENTES</div><h2>Presentes verificados</h2><p class="sectionDesc">Catálogo Mestre oficial: imagem, nome, valor e confirmação. IDs permanecem internos.</p></div><span class="badge" id="catalogCount">0 VERIFICADOS</span></div>
       <div class="filters"><div class="searchBox"><span>⌕</span><input id="giftSearch" placeholder="Buscar presente"></div><select id="giftSort"><option value="price">MENOR VALOR</option><option value="name">NOME</option></select></div>
       <div id="giftList" class="list"></div>
     </section>
 
     <section class="card" id="rulesSection" data-view="rules" hidden>
       <div class="sectionHead"><div><div class="kicker">05 · REGRAS</div><h2>Gatilhos universais</h2><p class="sectionDesc">Detecta eventos e emite pacotes normalizados.</p></div><span class="badge purpleBadge">UNIVERSAL</span></div>
-      <div class="infoBanner"><b>EVENTOS DISPONÍVEIS</b><span>Presente específico · valor mínimo · qualquer presente · curtidas · seguidor · compartilhamento · comentário</span></div>
+      <div class="infoBanner"><b>EVENTOS DISPONÍVEIS</b><span>Presente específico · valor mínimo · qualquer presente verificado · curtidas · seguidor · compartilhamento · comentário</span></div>
       <div class="grid2 formGrid">
-        <label class="field"><span>EVENTO</span><select id="ruleTrigger"><option value="gift">🎁 Presente específico</option><option value="giftvalue">💎 Valor da doação</option><option value="giftany">🎁 Qualquer presente</option><option value="like">❤️ Curtidas</option><option value="follow">➕ Novo seguidor</option><option value="share">↗ Compartilhou a Live</option><option value="chat">💬 Comentário</option></select></label>
+        <label class="field"><span>EVENTO</span><select id="ruleTrigger"><option value="gift">🎁 Presente específico</option><option value="giftvalue">💎 Valor da doação</option><option value="giftany">🎁 Qualquer presente verificado</option><option value="like">❤️ Curtidas</option><option value="follow">➕ Novo seguidor</option><option value="share">↗ Compartilhou a Live</option><option value="chat">💬 Comentário</option></select></label>
         <label class="field"><span>PRESENTE VERIFICADO</span><select id="ruleGift"><option value="">Selecione um verificado</option></select></label>
         <label class="field"><span>QUANTIDADE / VALOR MÍNIMO</span><input id="ruleQuantity" type="number" min="1" value="1"></label>
         <label class="field"><span>COOLDOWN (S)</span><input id="ruleCooldown" type="number" min="0" value="2"></label>
       </div>
       <button id="saveRule" class="primary full">+ SALVAR REGRA</button>
       <div id="ruleList" class="list compact"></div>
-    </section>
-
-    <section class="card" id="observerSection" data-view="live" hidden>
-      <div class="sectionHead"><div><div class="kicker">FERRAMENTA TÉCNICA</div><h2>Verificador de presentes ao vivo</h2><p class="sectionDesc">Ferramenta avançada preservada para manutenção.</p></div><span class="badge" id="observerBadge">OBSERVADOR OFF</span></div>
-      <div class="observerRow"><div class="inputShell"><b>@</b><input id="observerUser" autocapitalize="off" placeholder="usuario da Live"></div><button id="startObserver" class="primary">INICIAR</button><button id="stopObserver">PARAR</button></div>
-      <div id="discoveredList" class="list"></div>
     </section>
 
     <footer><span>LIVE+ CONNECTOR</span><small>Universal · modular · independente de gameplay</small></footer>
