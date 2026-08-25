@@ -10,8 +10,6 @@ export class LiveDiagnostics{
     this.client.addEventListener('status',e=>this.onStatus(e.detail||{}));
     this.client.addEventListener('debug',e=>this.onDebug(e.detail||{}));
     for(const type of ['like','chat','gift','follow','share'])this.client.addEventListener(type,()=>{this.lastInteractionAt=Date.now();this.lastInteractionType=type;this.render()});
-    this.client.addEventListener('gift_catalog_error',e=>{this.log('CATÁLOGO INDISPONÍVEL',e.detail?.message||'falha ao consultar presentes','warn');this.render()});
-    this.client.addEventListener('gift_catalog',()=>{this.log('CATÁLOGO ATUALIZADO','Metadados dos presentes recebidos','ok');this.render()});
   }
   onStatus(m){if(m.mode)this.mode=m.mode;const s=m.status||'';
     if(s==='connected'){this.liveStatus='LIVE OK';this.lastCause=m.recovered?'sessão recuperada':'nova sessão TikTok';this.log(m.recovered?'TIKTOK RECUPERADA':'TIKTOK CONECTADA',`${this.mode}${m.username?' · @'+m.username:''}`,'ok')}
