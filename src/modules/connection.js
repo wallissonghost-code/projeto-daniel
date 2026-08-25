@@ -39,6 +39,7 @@ export class ConnectorClient extends EventTarget{
   send(payload){if(this.ws?.readyState!==WebSocket.OPEN||!this.connected)return false;this.ws.send(JSON.stringify(payload));return true}
   startLive(username){const u=String(username||'').trim().replace(/^@/,'');if(!u){this.emit('error',{message:'Informe a conta @ da Live.'});return false}return this.send({type:'connect',username:u})}
   stopLive(){return this.send({type:'disconnect'})}
+  simulateTikTokDrop(){return this.send({type:'diagnostic_drop_tiktok'})}
   captureCatalog(username){return this.send({type:'giftcatalog',username:String(username||'').trim().replace(/^@/,'')})}
   observe(username){return this.send({type:'observe',username:String(username||'').trim().replace(/^@/,'')})}
   stopObserve(){return this.send({type:'unobserve'})}
