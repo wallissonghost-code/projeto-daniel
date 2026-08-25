@@ -2,6 +2,7 @@ const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[c]));
 const TRIGGER_LABELS={gift:'🎁 Presente específico',giftvalue:'💎 Valor da doação',giftany:'🎁 Qualquer presente',like:'❤️ Curtidas',follow:'➕ Novo seguidor',share:'🔁 Compartilhou a Live',chat:'💬 Comentário'};
 const giftValue=g=>Number(g?.diamondCount)>0?`${Number(g.diamondCount)} 💎`:'valor não identificado';
+const ageLabel=at=>{if(!at)return'—';const s=Math.max(0,Math.floor((Date.now()-at)/1000));return s<2?'AGORA':s<60?`HÁ ${s}s`:s<3600?`HÁ ${Math.floor(s/60)}min`:`HÁ ${Math.floor(s/3600)}h`};
 export function elements(){return new Proxy({}, {get:(_,k)=>$(k)})}
 export function verifiedCatalog(engine){return engine.catalog.filter(g=>g.verifiedAt&&!g.liveDivergence)}
 export function renderState(engine,client,els){
@@ -13,7 +14,7 @@ export function renderState(engine,client,els){
   els.healthAccount.textContent=s.settings.username?`@${s.settings.username.replace(/^@/,'')}`:'—';
   els.likes.textContent=st.like;els.chat.textContent=st.chat;els.follow.textContent=st.follow;els.share.textContent=st.share;els.gift.textContent=st.gift;
   els.lastEvent.textContent=st.last?`${st.last.type.toUpperCase()} · ${st.last.user||'viewer'}${st.last.gift?' · '+st.last.gift:''}`:'—';
-  els.lastSignal.textContent=client.lastPong?new Date(client.lastPong).toLocaleTimeString():client.connected?'AGUARDANDO':'—';
+  els.lastSignal.textContent=client.connected?ageLabel(client.lastPong):'—';
   const eventAge=st.last?now-st.last.at:Infinity;
   els.healthEvents.textContent=st.last?(eventAge<15000?'RECEBENDO':'SEM EVENTO RECENTE'):(st.startedAt?'AGUARDANDO':'AGUARDANDO');
   els.captureToggle.checked=s.settings.capture!==false;els.automationToggle.checked=!!s.settings.automation;els.engineBadge.textContent=s.settings.automation?'REGRAS ON':'CAPTURA';els.catalogCount.textContent=`${verified.length} verificados`;
