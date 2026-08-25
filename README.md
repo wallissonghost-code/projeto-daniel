@@ -1,61 +1,69 @@
-# Projeto Daniel · TikTok Live Platform Base
+# Projeto Daniel · Live+ Connector
 
-Base isolada e comercializável do sistema de Live usado no Caos Live, reconstruída sem alterar o repositório `Game`.
+Base modular para conectar TikTok Live a jogos e experiências interativas, derivada das mecânicas estáveis do Caos Live sem depender do gameplay do repositório `Game`.
 
-## Objetivo
+## Arquitetura atual
 
-Este repositório serve como núcleo reutilizável para jogos e experiências interativas conectadas ao TikTok Live. Ele mantém o conector, painel, catálogo de presentes, automações e protocolo separados do gameplay.
+O projeto está dividido em três camadas independentes:
 
-O repositório `Game` continua sendo a referência estável do Caos Live e não precisa ser modificado para evoluir esta base.
+- **Connector TikTok** — WebSocket, autenticação, sessão TikTok, eventos e Auto Recovery.
+- **Painel Live+** — conexão, saúde/diagnóstico, eventos, Catálogo Mestre e regras.
+- **Partida** — sessão PeerJS/WebRTC separada do TikTok; o painel gera o código e o jogo entra na sessão.
 
-## Mecânica TikTok estabilizada
+Uma falha na Partida não deve derrubar o Connector TikTok, e o gameplay não fica embutido no backend da Live.
 
-A sessão segue a filosofia que se mostrou mais confiável no Caos Live:
+## Catálogo Mestre
+
+`data/verified-gifts.json` é a única fonte oficial de presentes disponíveis para regras.
+
+- presentes do arquivo são marcados como verificados;
+- eventos da Live são cruzados por ID/nome com o Catálogo Mestre;
+- um gift desconhecido pode aparecer como evento da sessão, mas **não entra no catálogo e não dispara regras de gift**;
+- o painel não mantém mais Observador antigo, catálogo descoberto ou cache local de presentes verificados.
+
+Isso evita que metadados incompletos de uma Live alterem imagem, valor ou identidade dos presentes oficiais.
+
+## Connector TikTok
 
 - `tiktok-live-connector` 2.4.x
-- modo `modern-direct` quando `SIGN_API_KEY` não existe
-- somente uma conexão TikTok ativa por sessão
-- novo clique não cria conexões paralelas
-- `PARAR LIVE` é tratado como parada manual e não dispara Auto Recovery
-- queda inesperada dispara Auto Recovery
-- Auto Recovery limitado a 2 tentativas: 3s e 12s
-- rate limit usa espera maior para não martelar o TikTok
+- `modern-direct` quando `SIGN_API_KEY` não existe
+- uma sessão TikTok ativa por conexão
+- parada manual não dispara Auto Recovery
+- queda inesperada pode disparar Auto Recovery limitado
 - likes são agrupados antes de chegar ao painel
-- gifts, chat, follow e share continuam disponíveis
-- catálogo de presentes continua disponível
+- gifts, chat, follow e share são normalizados pelo protocolo
 
-Não existe watchdog agressivo ou loop infinito de reconexão.
+## Partida
 
-## Credenciais e isolamento por cliente
+O painel é o dono da sessão de jogo:
 
-Nenhum usuário precisa utilizar o Render ou a chave de outra pessoa.
+1. painel gera um código temporário;
+2. jogo informa esse código;
+3. conexão ocorre via PeerJS/WebRTC;
+4. primeiro jogo conectado consome o código;
+5. a sessão fica travada em `1 painel · 1 jogo`;
+6. o mesmo jogo recebe uma janela curta de reconexão.
 
-Cada instalação deve informar no painel:
+O adaptador reutilizável para jogos fica em `sdk/liveplus-game-session.js`.
 
-- `WebSocket`: por exemplo `wss://meu-conector.onrender.com`
-- `Key`: a chave criada pelo próprio cliente
-- `@TikTok`: a conta/live que deseja conectar
+## Estrutura
 
-No Render, cada instalação define sua própria variável:
-
-- `LIVE_CONNECTOR_KEY` — protege o WebSocket
-- `SIGN_API_KEY` — opcional; sem ela o sistema utiliza `modern-direct`
-
-A Key do Connector não é uma credencial da conta TikTok.
-
-## Organização
-
-- `cloud/server.mjs` — servidor HTTP/WebSocket e autenticação
-- `cloud/tiktok-session.mjs` — sessão TikTok estável e Auto Recovery bounded-2
-- `cloud/tiktok-resilience.mjs` — classificação de erros e delays de recuperação
-- `cloud/protocol.mjs` — normalização de usuários, gifts e catálogo
-- `src/modules/connection.js` — cliente WebSocket do painel
-- `src/modules/live-engine.js` — catálogo, eventos, regras e cooldown
-- `src/modules/storage.js` — persistência local
+- `index.html` — interface atual do painel
+- `src/app.js` — composição da camada Live
+- `src/partida.js` — sessão de jogo controlada pelo painel
+- `src/partida.css` — estilos exclusivos da Partida
+- `src/modules/connection.js` — cliente WebSocket do Connector
+- `src/modules/live-engine.js` — eventos, Catálogo Mestre e regras
+- `src/modules/diagnostics.js` — diagnóstico técnico da sessão
+- `src/modules/storage.js` — somente configurações e regras persistentes
 - `src/modules/ui.js` — renderização do painel
-- `src/app.js` — composição da interface
-
-A camada TikTok deve permanecer independente da camada de jogos. Jogos futuros devem consumir as automações pelo protocolo `action` + `payload`, sem colocar gameplay dentro do Connector.
+- `data/verified-gifts.json` — Catálogo Mestre
+- `cloud/server.mjs` — servidor HTTP/WebSocket e autenticação
+- `cloud/tiktok-session.mjs` — sessão TikTok e Auto Recovery
+- `cloud/tiktok-resilience.mjs` — classificação de falhas e backoff
+- `cloud/protocol.mjs` — normalização de eventos TikTok
+- `sdk/liveplus-game-session.js` — adaptador de jogo para a sessão Partida
+- `tests/live-engine.mjs` — validação da lógica do Catálogo Mestre e regras
 
 ## Executar
 
@@ -66,10 +74,16 @@ npm start
 
 Abra `http://localhost:8787`.
 
-## Deploy no Render
+Para validar a base:
 
-O `render.yaml` já está preparado para Node 24 e não contém nenhuma Key fixa. Ao criar o serviço, preencha `LIVE_CONNECTOR_KEY` no próprio Render. `SIGN_API_KEY` é opcional.
+```bash
+npm run check
+```
 
-## Regra de manutenção
+## Deploy
 
-Evite substituir o núcleo TikTok por versões antigas do painel ou por conectores históricos do `Game`. O histórico do Git preserva todas as versões; a implementação atual deste repositório é a base limpa destinada a evolução comercial.
+O `render.yaml` usa Node e não contém chave fixa. Cada instalação deve definir sua própria `LIVE_CONNECTOR_KEY`. `SIGN_API_KEY` permanece opcional.
+
+## Manutenção
+
+Não reintroduza arquivos ou fluxos históricos do painel antigo. Funcionalidades novas devem entrar em módulos próprios e possuir uma referência clara a partir de `index.html`, `src/app.js`, `src/partida.js`, backend, SDK ou testes.
