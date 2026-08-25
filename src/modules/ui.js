@@ -1,53 +1,14 @@
 const $=id=>document.getElementById(id);
-const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[c]));
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const TRIGGER_LABELS={gift:'🎁 Presente específico',giftvalue:'💎 Valor da doação',giftany:'🎁 Qualquer presente verificado',like:'❤️ Curtidas',follow:'➕ Novo seguidor',share:'🔁 Compartilhou a Live',chat:'💬 Comentário'};
 const giftValue=g=>Number(g?.diamondCount)>0?`${Number(g.diamondCount)} 💎`:'valor não identificado';
 const ageLabel=at=>{if(!at)return'—';const s=Math.max(0,Math.floor((Date.now()-at)/1000));return s<2?'AGORA':s<60?`HÁ ${s}s`:s<3600?`HÁ ${Math.floor(s/60)}min`:`HÁ ${Math.floor(s/3600)}h`};
 let lastGiftRenderKey='';
 export function elements(){return new Proxy({}, {get:(_,k)=>$(k)})}
 export function verifiedCatalog(engine){return engine.catalog.filter(g=>g.masterVerified===true)}
-export function renderState(engine,client,els){
-  const s=engine.snapshot(),st=s.stats,verified=verifiedCatalog(engine),now=Date.now();
-  const socketOk=client.connected&&client.authenticated;
-  els.cloudBadge.textContent=socketOk?'CONECTOR ONLINE':client.connected?'AUTENTICANDO':'DESCONECTADO';
-  els.connectorBadge.textContent=socketOk?'ONLINE':client.connected?'AUTH':'OFFLINE';
-  els.healthCloud.textContent=socketOk?'ONLINE':client.connected?'AUTH':'OFF';
-  els.healthAccount.textContent=s.settings.username?`@${s.settings.username.replace(/^@/,'')}`:'—';
-  els.likes.textContent=st.like;els.chat.textContent=st.chat;els.follow.textContent=st.follow;els.share.textContent=st.share;els.gift.textContent=st.gift;
-  els.lastEvent.textContent=st.last?`${st.last.type.toUpperCase()} · ${st.last.user||'viewer'}${st.last.gift?' · '+st.last.gift:''}${st.last.type==='gift'&&!st.last.verifiedGift?' · NÃO VERIFICADO':''}`:'—';
-  els.lastSignal.textContent=client.connected?ageLabel(client.lastPong):'—';
-  const eventAge=st.last?now-st.last.at:Infinity;
-  els.healthEvents.textContent=st.last?(eventAge<15000?'RECEBENDO':'SEM EVENTO RECENTE'):'AGUARDANDO';
-  els.captureToggle.checked=s.settings.capture!==false;els.automationToggle.checked=!!s.settings.automation;els.engineBadge.textContent=s.settings.automation?'REGRAS ON':'CAPTURA';els.catalogCount.textContent=`${verified.length} verificados`;
-  renderGifts(engine,els);renderRules(engine,els);
-}
-export function renderGifts(engine,els){
-  const q=(els.giftSearch.value||'').toLowerCase(),sort=els.giftSort.value;
-  let list=verifiedCatalog(engine).filter(g=>!q||`${g.name} ${g.id||''}`.toLowerCase().includes(q));
-  list=[...list].sort(sort==='name'?(a,b)=>a.name.localeCompare(b.name):(a,b)=>(a.diamondCount-b.diamondCount)||a.name.localeCompare(b.name));
-  const renderKey=JSON.stringify({q,sort,gifts:list.map(g=>[String(g.id||''),String(g.name||''),Number(g.diamondCount)||0,String(g.icon||'')])});
-  if(renderKey===lastGiftRenderKey)return;
-  lastGiftRenderKey=renderKey;
-  els.giftList.innerHTML=list.slice(0,100).map(g=>`<div class="item verifiedGift"><div class="giftMeta">${g.icon?`<img class="giftIcon" src="${esc(g.icon)}" alt="${esc(g.name)}" loading="lazy" decoding="async">`:'<div class="giftIcon giftMissing">?</div>'}<div class="giftText"><b>${esc(g.name)}</b><small>${esc(giftValue(g))}</small><small class="green">✓ CATÁLOGO MESTRE</small></div></div><button data-gift="${esc(g.id||g.name)}">USAR NA REGRA</button></div>`).join('')||'<div class="notice">Nenhum presente verificado disponível.</div>';
-  els.ruleGift.innerHTML='<option value="">Selecione um verificado</option>'+verifiedCatalog(engine).map(g=>`<option value="${esc(g.id||g.name)}">${esc(g.name)} · ${esc(giftValue(g))}</option>`).join('');
-}
-function ruleSummary(r){
-  if(r.trigger==='gift')return `presente ${r.giftName||'não selecionado'} · quantidade ${r.quantity}`;
-  if(r.trigger==='giftvalue')return `mínimo ${r.quantity} 💎`;
-  if(r.trigger==='giftany')return 'qualquer presente do Catálogo Mestre';
-  if(r.trigger==='like')return `${r.quantity} curtida${r.quantity===1?'':'s'}`;
-  if(r.trigger==='chat')return r.commentText?`comentário contém “${r.commentText}”`:'qualquer comentário';
-  if(r.trigger==='follow')return 'qualquer novo seguidor';
-  if(r.trigger==='share')return 'qualquer compartilhamento';
-  return `limite ${r.quantity}`;
-}
-export function renderRules(engine,els){
-  els.ruleList.innerHTML=engine.rules.map(r=>`<div class="item ruleItem"><div class="giftText"><b>${esc(TRIGGER_LABELS[r.trigger]||r.trigger)}</b><small>${esc(ruleSummary(r))} · cooldown ${Number(r.cooldown)||0}s</small></div><div class="ruleActions"><button data-edit-rule="${esc(r.id)}">EDITAR</button><button class="dangerGhost" data-delete-rule="${esc(r.id)}">EXCLUIR</button></div></div>`).join('')||'<div class="notice">Nenhuma regra configurada.</div>';
-}
-export function setLiveStatus(els,m){
-  const connected=m.status==='connected',checking=['checking','reconnecting','zombie'].includes(m.status);
-  els.healthTikTok.textContent=connected?'ON':checking?'CONECTANDO':'OFF';
-  els.healthBadge.textContent=connected?'SAUDÁVEL':checking?'RECUPERANDO':'AGUARDANDO';
-  els.healthBadge.classList.toggle('fail',!connected);
-  els.connectorNotice.textContent=connected?`TikTok conectada em @${m.username||''}`:m.reason||`TikTok: ${m.status||'desconectada'}`;
-}
+export function renderState(engine,client,els){const s=engine.snapshot(),st=s.stats,verified=verifiedCatalog(engine),now=Date.now(),socketOk=client.connected&&client.authenticated;els.cloudBadge.textContent=socketOk?'CONECTOR ONLINE':client.connected?'AUTENTICANDO':'DESCONECTADO';els.connectorBadge.textContent=socketOk?'ONLINE':client.connected?'AUTH':'OFFLINE';els.healthCloud.textContent=socketOk?'ONLINE':client.connected?'AUTH':'OFF';els.healthAccount.textContent=s.settings.username?`@${s.settings.username.replace(/^@/,'')}`:'—';els.likes.textContent=st.like;els.chat.textContent=st.chat;els.follow.textContent=st.follow;els.share.textContent=st.share;els.gift.textContent=st.gift;els.lastEvent.textContent=st.last?`${st.last.type.toUpperCase()} · ${st.last.user||'viewer'}${st.last.gift?' · '+st.last.gift:''}${st.last.type==='gift'&&!st.last.verifiedGift?' · NÃO VERIFICADO':''}`:'—';els.lastSignal.textContent=client.connected?ageLabel(client.lastPong):'—';const eventAge=st.last?now-st.last.at:Infinity;els.healthEvents.textContent=st.last?(eventAge<15000?'RECEBENDO':'SEM EVENTO RECENTE'):'AGUARDANDO';els.captureToggle.checked=s.settings.capture!==false;els.automationToggle.checked=!!s.settings.automation;els.engineBadge.textContent=s.settings.automation?'REGRAS ON':'CAPTURA';els.catalogCount.textContent=`${verified.length} verificados`;renderGifts(engine,els);renderRules(engine,els)}
+export function renderGifts(engine,els){const q=(els.giftSearch.value||'').toLowerCase(),sort=els.giftSort.value;let list=verifiedCatalog(engine).filter(g=>!q||`${g.name} ${g.id||''}`.toLowerCase().includes(q));list=[...list].sort(sort==='name'?(a,b)=>a.name.localeCompare(b.name):(a,b)=>(a.diamondCount-b.diamondCount)||a.name.localeCompare(b.name));const renderKey=JSON.stringify({q,sort,gifts:list.map(g=>[String(g.id||''),String(g.name||''),Number(g.diamondCount)||0,String(g.icon||'')])});if(renderKey===lastGiftRenderKey)return;lastGiftRenderKey=renderKey;els.giftList.innerHTML=list.slice(0,100).map(g=>`<div class="item verifiedGift"><div class="giftMeta">${g.icon?`<img class="giftIcon" src="${esc(g.icon)}" alt="${esc(g.name)}" loading="lazy" decoding="async">`:'<div class="giftIcon giftMissing">?</div>'}<div class="giftText"><b>${esc(g.name)}</b><small>${esc(giftValue(g))}</small><small class="green">✓ CATÁLOGO MESTRE</small></div></div><button data-gift="${esc(g.id||g.name)}">USAR NA REGRA</button></div>`).join('')||'<div class="notice">Nenhum presente verificado disponível.</div>';els.ruleGift.innerHTML='<option value="">Selecione um verificado</option>'+verifiedCatalog(engine).map(g=>`<option value="${esc(g.id||g.name)}">${esc(g.name)} · ${esc(giftValue(g))}</option>`).join('')}
+function triggerSummary(r){if(r.trigger==='gift')return `${r.giftName||'presente'} · ${r.giftValue||0} 💎 ×${r.quantity}`;if(r.trigger==='giftvalue')return `mínimo ${r.quantity} 💎`;if(r.trigger==='giftany')return 'qualquer presente verificado';if(r.trigger==='like')return `${r.quantity} curtida${r.quantity===1?'':'s'}`;if(r.trigger==='chat')return r.commentText?`“${r.commentText}”`:'qualquer comentário';if(r.trigger==='follow')return 'novo seguidor';if(r.trigger==='share')return 'compartilhamento';return `limite ${r.quantity}`}
+function paramsSummary(r){const entries=Object.entries(r.actionParams||{});return entries.length?entries.map(([k,v])=>`${k}: ${v}`).join(' · '):''}
+export function renderRules(engine,els){els.ruleList.innerHTML=engine.rules.map(r=>`<div class="automationCard"><div class="automationFlow"><div class="automationSource">${r.giftIcon?`<img src="${esc(r.giftIcon)}" alt="">`:`<div class="automationEmoji">${esc((TRIGGER_LABELS[r.trigger]||'🎯').split(' ')[0])}</div>`}<div><span>GATILHO</span><strong>${esc(TRIGGER_LABELS[r.trigger]||r.trigger)}</strong><small>${esc(triggerSummary(r))}</small></div></div><div class="flowArrow">→</div><div class="automationTarget"><div class="automationEmoji">${esc(r.actionIcon||'🎮')}</div><div><span>${esc(r.gameName||'JOGO')}</span><strong>${esc(r.actionLabel||'Sem ação definida')}</strong><small>${esc(paramsSummary(r)||r.actionDescription||'Ação do jogo conectado')}</small></div></div></div><div class="automationMeta">Cooldown ${Number(r.cooldown)||0}s${r.gameName?` · ${esc(r.gameName)}`:''}</div><div class="ruleActions"><button data-edit-rule="${esc(r.id)}">EDITAR</button><button data-test-rule="${esc(r.id)}">TESTAR</button><button class="dangerGhost" data-delete-rule="${esc(r.id)}">EXCLUIR</button></div></div>`).join('')||'<div class="notice">Nenhuma regra configurada.</div>'}
+export function setLiveStatus(els,m){const connected=m.status==='connected',checking=['checking','reconnecting','zombie'].includes(m.status);els.healthTikTok.textContent=connected?'ON':checking?'CONECTANDO':'OFF';els.healthBadge.textContent=connected?'SAUDÁVEL':checking?'RECUPERANDO':'AGUARDANDO';els.healthBadge.classList.toggle('fail',!connected);els.connectorNotice.textContent=connected?`TikTok conectada em @${m.username||''}`:m.reason||`TikTok: ${m.status||'desconectada'}`}
