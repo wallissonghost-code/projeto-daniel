@@ -33,7 +33,7 @@
     </section>
 
     <section class="card" id="healthSection">
-      <div class="sectionHead"><div><div class="kicker">02 · SAÚDE</div><h2>Conector + TikTok</h2><p class="sectionDesc">Heartbeat real do Connector separado dos eventos recebidos da Live.</p></div><span class="badge fail" id="healthBadge"><i></i>AGUARDANDO</span></div>
+      <div class="sectionHead"><div><div class="kicker">02 · SAÚDE</div><h2>Conector + TikTok</h2><p class="sectionDesc">Resumo operacional limpo. Abra o diagnóstico apenas quando precisar investigar uma oscilação.</p></div><span class="badge fail" id="healthBadge"><i></i>AGUARDANDO</span></div>
       <div class="stats health">
         <div class="stat primaryStat"><span>CONTA</span><strong id="healthAccount">—</strong><small>TikTok</small></div>
         <div class="stat"><span>CONECTOR</span><strong id="healthCloud">OFF</strong><small>WebSocket + auth</small></div>
@@ -41,6 +41,20 @@
         <div class="stat"><span>EVENTOS</span><strong id="healthEvents">AGUARDANDO</strong><small>Fluxo da Live</small></div>
         <div class="stat"><span>DURAÇÃO</span><strong id="duration">00:00</strong><small>Sessão</small></div>
         <div class="stat"><span>HEARTBEAT</span><strong id="lastSignal">—</strong><small>Último pong</small></div>
+      </div>
+      <button id="toggleDiagnostics" class="diagnosticToggle" aria-expanded="false"><span>DIAGNÓSTICO</span><small>Ver detalhes técnicos da sessão</small><b>+</b></button>
+      <div id="diagnosticsPanel" class="diagnosticsPanel" hidden>
+        <div class="diagHead"><div><div class="kicker">DIAGNÓSTICO · SOMENTE LEITURA</div><h3>Saúde detalhada</h3><p>Observa Connector, TikTok, Auto Recovery e eventos sem alterar a mecânica principal.</p></div><span class="diagLivePill" id="diagLive">AGUARDANDO</span></div>
+        <div class="diagGrid">
+          <div class="diagStat"><span>MODO</span><strong id="diagMode">—</strong></div>
+          <div class="diagStat"><span>CLOUD WS</span><strong id="diagCloud">FECHADO</strong></div>
+          <div class="diagStat"><span>ÚLTIMA INTERAÇÃO</span><strong id="diagInteraction">—</strong></div>
+          <div class="diagStat"><span>RECONEXÕES</span><strong id="diagReconnects">0</strong></div>
+          <div class="diagStat"><span>HEARTBEAT</span><strong id="diagHeartbeat">—</strong></div>
+          <div class="diagStat cause"><span>ÚLTIMA CAUSA</span><strong id="diagLastCause">nenhuma</strong></div>
+        </div>
+        <div class="diagToolbar"><span>LOG DA SESSÃO</span><div><button id="diagPing">TESTAR HEARTBEAT</button><button id="diagClear" class="dangerGhost">LIMPAR</button></div></div>
+        <div id="diagLog" class="diagLog"><div class="diagEmpty">Nenhum evento técnico registrado nesta sessão.</div></div>
       </div>
     </section>
 
