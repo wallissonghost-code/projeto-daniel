@@ -40,7 +40,14 @@ export class LiveEngine extends EventTarget{
     this.stats.last={...m,at:Date.now(),verifiedGift:m.type==='gift'?Boolean(this.findGift(m.giftId,m.gift)):undefined};
   }
   saveRule(rule){
-    const normalized={id:rule.id||crypto.randomUUID?.()||String(Date.now()),enabled:rule.enabled!==false,trigger:rule.trigger||'gift',giftId:rule.giftId?String(rule.giftId):'',giftName:rule.giftName||'',quantity:Math.max(1,Number(rule.quantity)||1),cooldown:Math.max(0,Number(rule.cooldown)||0)};
+    const trigger=rule.trigger||'gift';
+    const normalized={
+      id:rule.id||crypto.randomUUID?.()||String(Date.now()),enabled:rule.enabled!==false,trigger,
+      giftId:trigger==='gift'&&rule.giftId?String(rule.giftId):'',giftName:trigger==='gift'?String(rule.giftName||''):'',
+      quantity:['gift','giftvalue','like'].includes(trigger)?Math.max(1,Number(rule.quantity)||1):1,
+      commentText:trigger==='chat'?String(rule.commentText||'').trim():'',
+      cooldown:Math.max(0,Number(rule.cooldown)||0)
+    };
     const i=this.rules.findIndex(r=>r.id===normalized.id);if(i>=0)this.rules[i]=normalized;else this.rules.push(normalized);storage.saveRules(this.rules);this.emit('state',this.snapshot());return normalized;
   }
   deleteRule(id){this.rules=this.rules.filter(r=>r.id!==id);storage.saveRules(this.rules);this.emit('state',this.snapshot())}
@@ -52,10 +59,10 @@ export class LiveEngine extends EventTarget{
     if(rule.trigger==='giftvalue'&&m.type==='gift'){const g=this.giftMeta(m);return g.verified&&g.total>=rule.quantity}
     if(rule.trigger==='giftany'&&m.type==='gift')return this.giftMeta(m).verified;
     if(rule.trigger==='like'&&m.type==='like'){const key=rule.id,progress=(this.likeProgress.get(key)||0)+Math.max(1,Number(m.count)||1);this.likeProgress.set(key,progress);return progress>=rule.quantity}
-    if(rule.trigger==='chat'&&m.type==='chat')return true;
+    if(rule.trigger==='chat'&&m.type==='chat'){const wanted=norm(rule.commentText);return !wanted||norm(m.comment).includes(wanted)}
     return rule.trigger===m.type;
   }
   runRules(m){
-    const now=Date.now();for(const rule of this.rules){if(!this.match(rule,m)||!this.canFire(rule))continue;if(rule.trigger==='like')this.likeProgress.set(rule.id,Math.max(0,(this.likeProgress.get(rule.id)||0)-rule.quantity));const gift=m.type==='gift'?this.giftMeta(m):null;const payload={type:'live.rule',version:1,ruleId:rule.id,trigger:rule.trigger,threshold:rule.quantity,event:{type:m.type,user:m.user||'',comment:m.comment||'',gift:gift?.name||m.gift||null,giftId:m.giftId||null,count:m.count||1,diamondValue:gift?.unit||0,totalDiamonds:gift?.total||0,verifiedGift:gift?.verified??null,at:now}};this.client.emitAction('live.rule',payload,rule.id);this.emit('automation',{rule,event:m,payload})}
+    const now=Date.now();for(const rule of this.rules){if(!this.match(rule,m)||!this.canFire(rule))continue;if(rule.trigger==='like')this.likeProgress.set(rule.id,Math.max(0,(this.likeProgress.get(rule.id)||0)-rule.quantity));const gift=m.type==='gift'?this.giftMeta(m):null;const payload={type:'live.rule',version:1,ruleId:rule.id,trigger:rule.trigger,threshold:rule.quantity,commentText:rule.commentText||'',event:{type:m.type,user:m.user||'',comment:m.comment||'',gift:gift?.name||m.gift||null,giftId:m.giftId||null,count:m.count||1,diamondValue:gift?.unit||0,totalDiamonds:gift?.total||0,verifiedGift:gift?.verified??null,at:now}};this.client.emitAction('live.rule',payload,rule.id);this.emit('automation',{rule,event:m,payload})}
   }
 }
