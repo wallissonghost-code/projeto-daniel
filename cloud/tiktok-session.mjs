@@ -56,6 +56,19 @@ export class TikTokSession{
     s.recoveryAttempt=attempt;const delay=reconnectDelayMs(attempt,{rateLimited});this.status({status:'reconnecting',attempt,maxAttempts:MAX_RECOVERY_ATTEMPTS,delay,reason});this.debug('AUTO RECOVERY AGENDADO',{attempt,maxAttempts:MAX_RECOVERY_ATTEMPTS,delay,reason});const epoch=s.generation;
     s.recoveryTimer=setTimeout(async()=>{s.recoveryTimer=null;if(s.manualStop||s.connected||s.connecting||epoch!==s.generation)return;await this.connect(s.wantedUsername,{recovery:true})},delay);
   }
+  async simulateUnexpectedDrop(){
+    const s=this.state;
+    if(!s.connected||!s.live||!s.wantedUsername){safeSend(this.ws,{type:'diagnostic_drop_result',ok:false,message:'Nenhuma sessão TikTok ativa para derrubar.'});return false}
+    const username=s.wantedUsername;
+    s.manualStop=false;s.hadConnected=true;
+    this.debug('DIAGNOSTIC_DROP_TIKTOK',{username});
+    await this.dispose({clearUser:false,bump:true});
+    s.username=username;s.wantedUsername=username;
+    this.status({status:'disconnected',reason:'Queda simulada pelo diagnóstico',unexpected:true,diagnostic:true});
+    safeSend(this.ws,{type:'diagnostic_drop_result',ok:true,username});
+    this.scheduleRecovery('Queda simulada pelo diagnóstico');
+    return true;
+  }
   async disconnect(){const s=this.state;s.manualStop=true;this.clearRecovery();s.recoveryAttempt=0;s.wantedUsername='';s.hadConnected=false;await this.dispose({clearUser:true,bump:true});this.status({status:'disconnected',manual:true})}
   ping(){return{type:'pong',at:Date.now(),mode:this.mode,username:this.state.username||this.state.wantedUsername,tiktokConnected:this.state.connected,reconnecting:Boolean(this.state.recoveryTimer),attempt:this.state.recoveryAttempt,maxAttempts:MAX_RECOVERY_ATTEMPTS,lastEventAt:this.state.lastEventAt,lastSignal:this.state.lastSignal}}
   async giftCatalog(rawUsername=''){
