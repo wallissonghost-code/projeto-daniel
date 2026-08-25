@@ -1,15 +1,17 @@
 import {ConnectorClient} from './modules/connection.js';
 import {LiveEngine} from './modules/live-engine.js';
 import {elements,renderState,renderGifts,setLiveStatus} from './modules/ui.js';
+import {LiveDiagnostics} from './modules/diagnostics.js';
 
 const els=elements(),client=new ConnectorClient(),observerClient=new ConnectorClient(),engine=new LiveEngine(client);
+const diagnostics=new LiveDiagnostics(client,els);
 const settings=engine.settings;
 let primaryLiveUser='',observerMode='off';
 els.endpoint.value=settings.endpoint||'';els.accessKey.value=settings.key||'';els.username.value=settings.username||'';
 
 function persist(){engine.saveSettings({endpoint:els.endpoint.value.trim(),key:els.accessKey.value,username:els.username.value.trim().replace(/^@/,'')})}
 function notice(text,tone='neutral'){els.connectorNotice.dataset.tone=tone;els.connectorNotice.innerHTML=`<span class="noticeDot"></span><span>${String(text)}</span>`}
-function redraw(){renderState(engine,client,els);if(els.heroStatusText)els.heroStatusText.textContent=client.connected?(client.authenticated?'Conector autenticado':'WebSocket conectado'):'Aguardando conector'}
+function redraw(){renderState(engine,client,els);diagnostics.render();if(els.heroStatusText)els.heroStatusText.textContent=client.connected?(client.authenticated?'Conector autenticado':'WebSocket conectado'):'Aguardando conector'}
 function requireConnector(){if(!client.connected){notice('Conecte seu WebSocket antes de iniciar a Live.','error');return false}if(!client.authenticated){notice('O WebSocket abriu, mas a autenticação ainda não foi confirmada.','error');return false}return true}
 function cleanUser(v=''){return String(v||'').trim().replace(/^@/,'').toLowerCase()}
 function observerBadge(text,tone=''){if(!els.observerBadge)return;els.observerBadge.textContent=text;els.observerBadge.dataset.tone=tone}
@@ -63,6 +65,10 @@ els.giftSearch.oninput=()=>renderGifts(engine,els);els.giftSort.onchange=()=>ren
 els.giftList.onclick=e=>{const b=e.target.closest('[data-gift]');if(!b)return;els.ruleGift.value=b.dataset.gift;els.ruleTrigger.value='gift';els.ruleTrigger.scrollIntoView({behavior:'smooth',block:'center'})};
 els.saveRule.onclick=()=>{const gift=engine.catalog.find(g=>(g.id||g.name)===els.ruleGift.value);engine.saveRule({trigger:els.ruleTrigger.value,giftId:gift?.id||'',giftName:gift?.name||'',quantity:els.ruleQuantity.value,cooldown:els.ruleCooldown.value})};
 els.ruleList.onclick=e=>{const b=e.target.closest('[data-delete-rule]');if(b)engine.deleteRule(b.dataset.deleteRule)};
+
+els.toggleDiagnostics.onclick=()=>{const opening=els.diagnosticsPanel.hidden;els.diagnosticsPanel.hidden=!opening;els.toggleDiagnostics.setAttribute('aria-expanded',String(opening));els.toggleDiagnostics.querySelector('b').textContent=opening?'−':'+';if(opening){diagnostics.render();setTimeout(()=>els.diagnosticsPanel.scrollIntoView({behavior:'smooth',block:'nearest'}),50)}};
+els.diagClear.onclick=()=>diagnostics.clear();
+els.diagPing.onclick=()=>{if(!requireConnector())return;const before=client.lastPong;els.diagPing.disabled=true;els.diagPing.textContent='TESTANDO…';diagnostics.log('HEARTBEAT MANUAL','Ping enviado ao Connector','neutral');client.ping();setTimeout(()=>{const ok=client.lastPong>before;diagnostics.log(ok?'HEARTBEAT OK':'HEARTBEAT SEM RESPOSTA',ok?`pong ${new Date(client.lastPong).toLocaleTimeString()}`:'nenhum pong novo em 2s',ok?'ok':'error');diagnostics.render();els.diagPing.disabled=false;els.diagPing.textContent='TESTAR HEARTBEAT'},2000)};
 
 els.startObserver.onclick=async()=>{
   persist();const user=cleanUser(els.observerUser?.value||els.username.value);if(!user){notice('Informe uma conta para observar.','error');return}
