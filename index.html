@@ -18,12 +18,17 @@
       <div class="topActions"><span class="version">PLUS BETA</span><span class="badge" id="cloudBadge"><i></i>DESCONECTADO</span></div>
     </header>
 
-    <nav class="viewTabs" aria-label="Áreas do painel">
+    <nav class="viewTabs" aria-label="Áreas principais do painel">
       <button class="viewTab" type="button" data-view-tab="match">🎮 PARTIDA</button>
       <button class="viewTab active" type="button" data-view-tab="live">📡 LIVE</button>
-      <button class="viewTab" type="button" data-view-tab="events">🛰 EVENTOS</button>
-      <button class="viewTab" type="button" data-view-tab="gifts">🎁 PRESENTES</button>
-      <button class="viewTab" type="button" data-view-tab="rules">⚙️ REGRAS</button>
+    </nav>
+
+    <nav class="liveSectionNav" data-view="live" aria-label="Seções da Live">
+      <a href="#connectorSection">CONEXÃO</a>
+      <a href="#healthSection">SAÚDE</a>
+      <a href="#engineSection">EVENTOS</a>
+      <a href="#catalogSection">PRESENTES</a>
+      <a href="#rulesSection">REGRAS</a>
     </nav>
 
     <section class="card cardGlow" id="matchSection" data-view="match" hidden>
@@ -81,7 +86,7 @@
       </div>
     </section>
 
-    <section class="card" id="engineSection" data-view="events" hidden>
+    <section class="card" id="engineSection" data-view="live">
       <div class="sectionHead"><div><div class="kicker">03 · EVENTOS</div><h2>Live Engine</h2><p class="sectionDesc">Eventos universais recebidos da TikTok Live.</p></div><span class="badge purpleBadge" id="engineBadge">OFF</span></div>
       <div class="switchGrid">
         <label class="toggleRow"><div class="toggleIcon">LIVE</div><div class="toggleCopy"><b>CAPTURA AO VIVO</b><small>contadores e último evento da sessão</small></div><input id="captureToggle" type="checkbox"><span class="switch"></span></label>
@@ -91,13 +96,13 @@
       <div class="notice eventNotice"><span>ÚLTIMO EVENTO</span><strong id="lastEvent">—</strong></div>
     </section>
 
-    <section class="card" id="catalogSection" data-view="gifts" hidden>
+    <section class="card" id="catalogSection" data-view="live">
       <div class="sectionHead"><div><div class="kicker">04 · PRESENTES</div><h2>Presentes verificados</h2><p class="sectionDesc">Catálogo Mestre oficial: imagem, nome, valor e confirmação. IDs permanecem internos.</p></div><span class="badge" id="catalogCount">0 VERIFICADOS</span></div>
       <div class="filters"><div class="searchBox"><span>⌕</span><input id="giftSearch" placeholder="Buscar presente"></div><select id="giftSort"><option value="price">MENOR VALOR</option><option value="name">NOME</option></select></div>
       <div id="giftList" class="list"></div>
     </section>
 
-    <section class="card" id="rulesSection" data-view="rules" hidden>
+    <section class="card" id="rulesSection" data-view="live">
       <div class="sectionHead"><div><div class="kicker">05 · REGRAS</div><h2>Gatilhos universais</h2><p class="sectionDesc">Detecta eventos e emite pacotes normalizados.</p></div><span class="badge purpleBadge">UNIVERSAL</span></div>
       <div class="infoBanner"><b>EVENTOS DISPONÍVEIS</b><span>Presente específico · valor mínimo · qualquer presente verificado · curtidas · seguidor · compartilhamento · comentário</span></div>
       <div class="grid2 formGrid">
