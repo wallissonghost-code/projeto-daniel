@@ -7,6 +7,7 @@
   <title>Live+ Connector</title>
   <link rel="stylesheet" href="./src/styles.css">
   <link rel="stylesheet" href="./src/diagnostics.css">
+  <link rel="stylesheet" href="./src/mobile-fixes.css">
 </head>
 <body>
   <div class="ambient ambientA"></div><div class="ambient ambientB"></div>
@@ -16,36 +17,30 @@
       <div class="topActions"><span class="version">PLUS BETA</span><span class="badge" id="cloudBadge"><i></i>DESCONECTADO</span></div>
     </header>
 
-    <section class="hero">
-      <div><div class="kicker">LIVE CONNECTOR PLUS</div><h1>Conecte. Escute. Automatize.</h1><p>Um painel universal para transformar eventos da TikTok Live em sinais confiáveis para qualquer aplicativo, jogo, overlay ou automação.</p></div>
-      <div class="heroStatus"><span class="pulse"></span><div><small>STATUS GERAL</small><strong id="heroStatusText">Aguardando conector</strong></div></div>
-    </section>
-
     <section class="card cardGlow" id="connectorSection">
-      <div class="sectionHead"><div><div class="kicker">01 · CONEXÃO</div><h2>Seu conector</h2><p class="sectionDesc">Cada usuário conecta o próprio WebSocket e sua própria chave.</p></div><span class="badge" id="connectorBadge"><i></i>OFFLINE</span></div>
+      <div class="sectionHead"><div><div class="kicker">01 · CONEXÃO</div><h2>Seu conector</h2><p class="sectionDesc">Conecte seu WebSocket, sua chave e a conta da Live.</p></div><span class="badge" id="connectorBadge"><i></i>OFFLINE</span></div>
       <div class="connectionGrid">
         <label class="field wideField"><span>WEBSOCKET DO CONECTOR</span><div class="inputShell"><b>WSS</b><input id="endpoint" autocomplete="off" inputmode="url" placeholder="wss://seu-conector.exemplo.com"></div></label>
         <label class="field"><span>CHAVE PRIVADA</span><input id="accessKey" type="password" autocomplete="off" placeholder="Sua chave do conector"></label>
         <label class="field"><span>CONTA DA LIVE</span><input id="username" autocomplete="off" autocapitalize="off" placeholder="@usuario"></label>
       </div>
       <div class="actions four"><button id="connectCloud" class="primary">CONECTAR</button><button id="disconnectCloud" class="danger">DESCONECTAR</button><button id="connectLive" class="primary soft">CONECTAR LIVE</button><button id="stopLive">PARAR LIVE</button></div>
-      <div class="actions testActions"><button id="testConnector" class="secondary">TESTAR CONNECTOR</button><button id="testPanel">SIMULAR PAINEL SEM LIVE</button></div>
       <div class="notice" id="connectorNotice"><span class="noticeDot"></span><span>Nenhum conector configurado neste navegador.</span></div>
     </section>
 
     <section class="card" id="healthSection">
-      <div class="sectionHead"><div><div class="kicker">02 · SAÚDE</div><h2>Conector + TikTok</h2><p class="sectionDesc">Resumo operacional limpo. Abra o diagnóstico apenas quando precisar investigar uma oscilação.</p></div><span class="badge fail" id="healthBadge"><i></i>AGUARDANDO</span></div>
+      <div class="sectionHead"><div><div class="kicker">02 · SAÚDE</div><h2>Conector + TikTok</h2><p class="sectionDesc">Resumo operacional. Testes e ferramentas ficam isolados no diagnóstico.</p></div><span class="badge fail" id="healthBadge"><i></i>AGUARDANDO</span></div>
       <div class="stats health">
         <div class="stat primaryStat"><span>CONTA</span><strong id="healthAccount">—</strong><small>TikTok</small></div>
         <div class="stat"><span>CONECTOR</span><strong id="healthCloud">OFF</strong><small>WebSocket + auth</small></div>
         <div class="stat"><span>TIKTOK LIVE</span><strong id="healthTikTok">OFF</strong><small>Sessão</small></div>
         <div class="stat"><span>EVENTOS</span><strong id="healthEvents">AGUARDANDO</strong><small>Fluxo da Live</small></div>
         <div class="stat"><span>DURAÇÃO</span><strong id="duration">00:00</strong><small>Sessão</small></div>
-        <div class="stat"><span>HEARTBEAT</span><strong id="lastSignal">—</strong><small>Último pong</small></div>
+        <div class="stat"><span>HEARTBEAT</span><strong id="lastSignal">—</strong><small>Resposta do Connector</small></div>
       </div>
-      <button id="toggleDiagnostics" class="diagnosticToggle" aria-expanded="false"><span>DIAGNÓSTICO</span><small>Ver detalhes técnicos da sessão</small><b>+</b></button>
+      <button id="toggleDiagnostics" class="diagnosticToggle" aria-expanded="false"><span>DIAGNÓSTICO</span><small>Ver detalhes e ferramentas técnicas</small><b>+</b></button>
       <div id="diagnosticsPanel" class="diagnosticsPanel" hidden>
-        <div class="diagHead"><div><div class="kicker">DIAGNÓSTICO · SOMENTE LEITURA</div><h3>Saúde detalhada</h3><p>Observa Connector, TikTok, Auto Recovery e eventos sem alterar a mecânica principal.</p></div><span class="diagLivePill" id="diagLive">AGUARDANDO</span></div>
+        <div class="diagHead"><div><div class="kicker">DIAGNÓSTICO · TÉCNICO</div><h3>Saúde detalhada</h3><p>Connector, TikTok, Auto Recovery e histórico da sessão.</p></div><span class="diagLivePill" id="diagLive">AGUARDANDO</span></div>
         <div class="diagGrid">
           <div class="diagStat"><span>MODO</span><strong id="diagMode">—</strong></div>
           <div class="diagStat"><span>CLOUD WS</span><strong id="diagCloud">FECHADO</strong></div>
@@ -54,13 +49,18 @@
           <div class="diagStat"><span>HEARTBEAT</span><strong id="diagHeartbeat">—</strong></div>
           <div class="diagStat cause"><span>ÚLTIMA CAUSA</span><strong id="diagLastCause">nenhuma</strong></div>
         </div>
+        <div class="diagTools">
+          <div class="diagTool"><div><b>Testar Connector</b><small>WebSocket → autenticação → heartbeat, sem abrir Live.</small></div><button id="testConnector" class="secondary">TESTAR</button></div>
+          <div class="diagTool"><div><b>Simular painel sem Live</b><small>Testa interface, eventos e regras localmente.</small></div><button id="testPanel">SIMULAR</button></div>
+          <div class="diagTool dangerTool"><div><b>Forçar queda da sessão TikTok</b><small>Derruba somente a sessão atual como falha inesperada. O Auto Recovery deve assumir sem novo clique.</small></div><button id="simulateTikTokDrop" class="dropButton">SIMULAR QUEDA TIKTOK</button></div>
+        </div>
         <div class="diagToolbar"><span>LOG DA SESSÃO</span><div><button id="diagPing">TESTAR HEARTBEAT</button><button id="diagClear" class="dangerGhost">LIMPAR</button></div></div>
         <div id="diagLog" class="diagLog"><div class="diagEmpty">Nenhum evento técnico registrado nesta sessão.</div></div>
       </div>
     </section>
 
     <section class="card" id="engineSection">
-      <div class="sectionHead"><div><div class="kicker">03 · EVENTOS</div><h2>Live Engine</h2><p class="sectionDesc">Capture apenas sinais universais da TikTok Live.</p></div><span class="badge purpleBadge" id="engineBadge">OFF</span></div>
+      <div class="sectionHead"><div><div class="kicker">03 · EVENTOS</div><h2>Live Engine</h2><p class="sectionDesc">Eventos universais recebidos da TikTok Live.</p></div><span class="badge purpleBadge" id="engineBadge">OFF</span></div>
       <div class="switchGrid">
         <label class="toggleRow"><div class="toggleIcon">LIVE</div><div class="toggleCopy"><b>CAPTURA AO VIVO</b><small>presentes, valor, curtidas, comentários, seguidores e compartilhamentos</small></div><input id="captureToggle" type="checkbox"><span class="switch"></span></label>
         <label class="toggleRow"><div class="toggleIcon">RULE</div><div class="toggleCopy"><b>REGRAS</b><small>dispara eventos universais normalizados</small></div><input id="automationToggle" type="checkbox"><span class="switch"></span></label>
@@ -70,14 +70,14 @@
     </section>
 
     <section class="card" id="catalogSection">
-      <div class="sectionHead"><div><div class="kicker">04 · PRESENTES</div><h2>Presentes verificados</h2><p class="sectionDesc">Lista limpa para uso comercial: imagem, nome, valor e confirmação. O ID continua interno para a automação.</p></div><span class="badge" id="catalogCount">0 VERIFICADOS</span></div>
+      <div class="sectionHead"><div><div class="kicker">04 · PRESENTES</div><h2>Presentes verificados</h2><p class="sectionDesc">Imagem, nome, valor e confirmação. O ID permanece interno.</p></div><span class="badge" id="catalogCount">0 VERIFICADOS</span></div>
       <button id="captureCatalog" class="primary full captureBtn">ATUALIZAR METADADOS DA LIVE</button>
       <div class="filters"><div class="searchBox"><span>⌕</span><input id="giftSearch" placeholder="Buscar presente"></div><select id="giftSort"><option value="price">MENOR VALOR</option><option value="name">NOME</option></select></div>
       <div id="giftList" class="list"></div>
     </section>
 
     <section class="card" id="rulesSection">
-      <div class="sectionHead"><div><div class="kicker">05 · REGRAS</div><h2>Gatilhos universais</h2><p class="sectionDesc">Sem lógica de jogo. Só detecta o evento e emite o pacote normalizado.</p></div><span class="badge purpleBadge">UNIVERSAL</span></div>
+      <div class="sectionHead"><div><div class="kicker">05 · REGRAS</div><h2>Gatilhos universais</h2><p class="sectionDesc">Detecta eventos e emite pacotes normalizados.</p></div><span class="badge purpleBadge">UNIVERSAL</span></div>
       <div class="infoBanner"><b>EVENTOS DISPONÍVEIS</b><span>Presente específico · valor mínimo · qualquer presente · curtidas · seguidor · compartilhamento · comentário</span></div>
       <div class="grid2 formGrid">
         <label class="field"><span>EVENTO</span><select id="ruleTrigger"><option value="gift">🎁 Presente específico</option><option value="giftvalue">💎 Valor da doação</option><option value="giftany">🎁 Qualquer presente</option><option value="like">❤️ Curtidas</option><option value="follow">➕ Novo seguidor</option><option value="share">↗ Compartilhou a Live</option><option value="chat">💬 Comentário</option></select></label>
@@ -90,7 +90,7 @@
     </section>
 
     <section class="card" id="observerSection" hidden>
-      <div class="sectionHead"><div><div class="kicker">FERRAMENTA TÉCNICA</div><h2>Verificador de presentes ao vivo</h2><p class="sectionDesc">Ferramenta avançada preservada para manutenção e validação; não aparece na interface comercial.</p></div><span class="badge" id="observerBadge">OBSERVADOR OFF</span></div>
+      <div class="sectionHead"><div><div class="kicker">FERRAMENTA TÉCNICA</div><h2>Verificador de presentes ao vivo</h2><p class="sectionDesc">Ferramenta avançada preservada para manutenção.</p></div><span class="badge" id="observerBadge">OBSERVADOR OFF</span></div>
       <div class="observerRow"><div class="inputShell"><b>@</b><input id="observerUser" autocapitalize="off" placeholder="usuario da Live"></div><button id="startObserver" class="primary">INICIAR</button><button id="stopObserver">PARAR</button></div>
       <div id="discoveredList" class="list"></div>
     </section>
