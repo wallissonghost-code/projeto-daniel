@@ -24,6 +24,7 @@ export class LiveEngine extends EventTarget{
   }
   onMessage(m){
     if(m.type==='status'&&m.status==='connected'&&!this.stats.startedAt)this.stats.startedAt=Date.now();
+    if(m.type==='status'&&(m.status==='offline'||(m.status==='disconnected'&&m.unexpected!==true)))this.stats.startedAt=0;
     const unfinishedStreak=m.type==='gift'&&Number(m.giftType)===1&&m.repeatEnd===false;
     if(['like','chat','follow','share','gift'].includes(m.type)&&!unfinishedStreak){
       if(this.settings.capture!==false)this.captureEvent(m);
