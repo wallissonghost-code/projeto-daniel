@@ -42,7 +42,7 @@ els.stopLive.onclick=()=>{if(!requireConnector())return;client.stopLive();notice
 els.captureToggle.onchange=()=>engine.saveSettings({capture:els.captureToggle.checked});
 els.automationToggle.onchange=()=>engine.saveSettings({automation:els.automationToggle.checked});
 els.giftSearch.oninput=()=>renderGifts(engine,els);els.giftSort.onchange=()=>renderGifts(engine,els);
-els.giftList.onclick=e=>{const b=e.target.closest('[data-gift]');if(!b)return;els.ruleGift.value=b.dataset.gift;els.ruleTrigger.value='gift';document.querySelector('[data-view-tab="rules"]')?.click()};
+els.giftList.onclick=e=>{const b=e.target.closest('[data-gift]');if(!b)return;els.ruleGift.value=b.dataset.gift;els.ruleTrigger.value='gift';els.rulesSection?.scrollIntoView({behavior:'smooth',block:'start'})};
 els.saveRule.onclick=()=>{const gift=engine.catalog.find(g=>(g.id||g.name)===els.ruleGift.value);engine.saveRule({trigger:els.ruleTrigger.value,giftId:gift?.id||'',giftName:gift?.name||'',quantity:els.ruleQuantity.value,cooldown:els.ruleCooldown.value})};
 els.ruleList.onclick=e=>{const b=e.target.closest('[data-delete-rule]');if(b)engine.deleteRule(b.dataset.deleteRule)};
 
