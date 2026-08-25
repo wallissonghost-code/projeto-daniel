@@ -1,0 +1,50 @@
+name: Sync rules to game
+on:
+  push:
+    paths:
+      - '.github/workflows/sync-rules-to-game.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Send active rule visuals to connected game
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('src/app.js')
+          s=p.read_text()
+          helper="""\nfunction syncGameRuleVisuals(){\n  const manifest=gameBridge.manifest;if(!manifest?.gameId)return false;\n  const rules=engine.rules.filter(r=>r.gameId===manifest.gameId&&r.actionId);\n  const payload=rules.map(r=>({actionId:r.actionId,trigger:r.trigger,giftId:r.giftId||'',giftName:r.giftName||'',giftIcon:r.giftIcon||'',giftValue:Number(r.giftValue)||0,quantity:Number(r.quantity)||1,commentText:r.commentText||''}));\n  return window.LivePlusMatch?.send?.({type:'rules_sync',gameId:manifest.gameId,rules:payload,at:Date.now()})||false;\n}\n"""
+          anchor="function resetRuleForm(){"
+          if 'function syncGameRuleVisuals()' not in s:
+            if anchor not in s: raise SystemExit('helper anchor miss')
+            s=s.replace(anchor,helper+anchor,1)
+          old="gameBridge.addEventListener('manifest',e=>{gameBridge.render(els);notice(`🎮 ${e.detail.name} conectado · ${e.detail.actions.length} ações disponíveis.`,'ok')});"
+          new="gameBridge.addEventListener('manifest',e=>{gameBridge.render(els);notice(`🎮 ${e.detail.name} conectado · ${e.detail.actions.length} ações disponíveis.`,'ok');setTimeout(syncGameRuleVisuals,80)});"
+          if old in s:s=s.replace(old,new,1)
+          elif 'setTimeout(syncGameRuleVisuals,80)' not in s: raise SystemExit('manifest listener miss')
+          oldsave="engine.saveRule({id:editingRuleId||undefined,trigger,giftId:gift?.id||'',giftName:gift?.name||'',giftIcon:gift?.icon||'',giftValue:gift?.diamondCount||0,quantity:els.ruleQuantity.value,commentText:els.ruleCommentText.value,cooldown:els.ruleCooldown.value,gameId:gameBridge.manifest?.gameId||'',gameName:gameBridge.manifest?.name||'',gameIcon:gameBridge.manifest?.icon||'',actionId:action?.id||'',actionLabel:action?.label||'',actionIcon:action?.icon||'',actionIconImage:action?.iconImage||'',actionDescription:action?.description||'',actionParams:gameBridge.readParams()});resetRuleForm()"
+          newsave="engine.saveRule({id:editingRuleId||undefined,trigger,giftId:gift?.id||'',giftName:gift?.name||'',giftIcon:gift?.icon||'',giftValue:gift?.diamondCount||0,quantity:els.ruleQuantity.value,commentText:els.ruleCommentText.value,cooldown:els.ruleCooldown.value,gameId:gameBridge.manifest?.gameId||'',gameName:gameBridge.manifest?.name||'',gameIcon:gameBridge.manifest?.icon||'',actionId:action?.id||'',actionLabel:action?.label||'',actionIcon:action?.icon||'',actionIconImage:action?.iconImage||'',actionDescription:action?.description||'',actionParams:gameBridge.readParams()});syncGameRuleVisuals();resetRuleForm()"
+          if oldsave in s:s=s.replace(oldsave,newsave,1)
+          elif '});syncGameRuleVisuals();resetRuleForm()' not in s: raise SystemExit('save hook miss')
+          olddel="engine.deleteRule(del.dataset.deleteRule)}};"
+          newdel="engine.deleteRule(del.dataset.deleteRule);syncGameRuleVisuals()}};"
+          if olddel in s:s=s.replace(olddel,newdel,1)
+          elif 'engine.deleteRule(del.dataset.deleteRule);syncGameRuleVisuals()' not in s: raise SystemExit('delete hook miss')
+          p.write_text(s)
+          print('Rule visual sync added')
+          PY
+      - name: Sanity checks
+        run: |
+          grep -q "function syncGameRuleVisuals" src/app.js
+          grep -q "type:'rules_sync'" src/app.js
+          grep -q "setTimeout(syncGameRuleVisuals,80)" src/app.js
+      - name: Commit
+        run: |
+          git config user.name ghostzinho
+          git config user.email wallissonghost@gmail.com
+          git add src/app.js
+          git commit -m "integration: enviar regras visuais ativas ao jogo"
+          git push
