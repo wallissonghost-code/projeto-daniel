@@ -41,6 +41,7 @@ client.addEventListener('status',e=>{
 client.addEventListener('error',e=>notice(e.detail.message||'Erro no conector','error'));
 client.addEventListener('gift_catalog',()=>notice('Catálogo da Live atualizado. Somente presentes realmente verificados ficam visíveis.','ok'));
 client.addEventListener('gift_catalog_error',e=>notice(`Live conectada, mas o catálogo detalhado falhou: ${e.detail.message||'erro desconhecido'}`,'error'));
+client.addEventListener('diagnostic_drop_result',e=>{const d=e.detail||{};diagnostics.log(d.ok?'QUEDA TIKTOK SIMULADA':'SIMULAÇÃO RECUSADA',d.message||'Auto Recovery deve assumir a sessão.',d.ok?'warn':'error');diagnostics.render();notice(d.ok?'Sessão TikTok derrubada de propósito. Acompanhe o Auto Recovery no diagnóstico.':d.message||'Não foi possível simular a queda.',d.ok?'ok':'error')});
 
 observerClient.addEventListener('status',e=>{const m=e.detail;if(m.status==='connected'){observerBadge('OBSERVANDO','ok');observerMode='own'}else if(['checking','reconnecting'].includes(m.status))observerBadge('CONECTANDO');else if(observerMode==='own'){observerBadge('OBSERVADOR OFF');observerMode='off'}});
 observerClient.addEventListener('message',e=>{const m=e.detail;if(m.type==='gift')engine.onMessage({...m,observer:true})});
@@ -69,6 +70,7 @@ els.ruleList.onclick=e=>{const b=e.target.closest('[data-delete-rule]');if(b)eng
 els.toggleDiagnostics.onclick=()=>{const opening=els.diagnosticsPanel.hidden;els.diagnosticsPanel.hidden=!opening;els.toggleDiagnostics.setAttribute('aria-expanded',String(opening));els.toggleDiagnostics.querySelector('b').textContent=opening?'−':'+';if(opening){diagnostics.render();setTimeout(()=>els.diagnosticsPanel.scrollIntoView({behavior:'smooth',block:'nearest'}),50)}};
 els.diagClear.onclick=()=>diagnostics.clear();
 els.diagPing.onclick=()=>{if(!requireConnector())return;const before=client.lastPong;els.diagPing.disabled=true;els.diagPing.textContent='TESTANDO…';diagnostics.log('HEARTBEAT MANUAL','Ping enviado ao Connector','neutral');client.ping();setTimeout(()=>{const ok=client.lastPong>before;diagnostics.log(ok?'HEARTBEAT OK':'HEARTBEAT SEM RESPOSTA',ok?`pong ${new Date(client.lastPong).toLocaleTimeString()}`:'nenhum pong novo em 2s',ok?'ok':'error');diagnostics.render();els.diagPing.disabled=false;els.diagPing.textContent='TESTAR HEARTBEAT'},2000)};
+els.simulateTikTokDrop.onclick=()=>{if(!requireConnector())return;diagnostics.log('TESTE CONTROLADO','Solicitando queda intencional da sessão TikTok','warn');diagnostics.render();if(!client.simulateTikTokDrop())notice('Não foi possível enviar o teste de queda.','error')};
 
 els.startObserver.onclick=async()=>{
   persist();const user=cleanUser(els.observerUser?.value||els.username.value);if(!user){notice('Informe uma conta para observar.','error');return}
@@ -82,7 +84,7 @@ els.stopObserver.onclick=()=>{if(observerMode==='own'){observerClient.stopLive()
 els.testConnector.onclick=async()=>{
   persist();const endpoint=els.endpoint.value.trim();
   if(!endpoint){notice('Informe o WebSocket para testar o Connector.','error');els.endpoint.focus();return}
-  const diagnostic=new ConnectorClient();els.testConnector.disabled=true;els.testConnector.textContent='TESTANDO CONNECTOR…';notice('Diagnóstico: WebSocket → autenticação → heartbeat. Nenhuma Live será aberta.');
+  const diagnostic=new ConnectorClient();els.testConnector.disabled=true;els.testConnector.textContent='TESTANDO…';notice('Diagnóstico: WebSocket → autenticação → heartbeat. Nenhuma Live será aberta.');
   try{
     await diagnostic.connect(endpoint,els.accessKey.value);
     const started=performance.now();
@@ -92,9 +94,9 @@ els.testConnector.onclick=async()=>{
       if(!diagnostic.ping()){clearTimeout(timer);reject(new Error('Não foi possível enviar o heartbeat.'))}
     });
     const latency=Math.max(1,Math.round(performance.now()-started));
-    notice(`✅ Connector OK · autenticação OK · heartbeat ${latency} ms`,'ok');
-  }catch(error){notice(`❌ Diagnóstico falhou: ${error?.message||error}`,'error')}
-  finally{diagnostic.disconnect();els.testConnector.disabled=false;els.testConnector.textContent='TESTAR CONNECTOR'}
+    diagnostics.log('TESTE DO CONNECTOR OK',`autenticação OK · heartbeat ${latency} ms`,'ok');notice(`✅ Connector OK · autenticação OK · heartbeat ${latency} ms`,'ok');
+  }catch(error){diagnostics.log('TESTE DO CONNECTOR FALHOU',error?.message||String(error),'error');notice(`❌ Diagnóstico falhou: ${error?.message||error}`,'error')}
+  finally{diagnostic.disconnect();diagnostics.render();els.testConnector.disabled=false;els.testConnector.textContent='TESTAR'}
 };
 
 els.testPanel.onclick=async()=>{
@@ -110,7 +112,7 @@ els.testPanel.onclick=async()=>{
     {type:'gift',user:'nexus.qa',gift:'Rose Test',giftId:'qa-rose',diamondCount:1,count:2,icon:''}
   ];
   for(const event of samples){engine.onMessage(event);await new Promise(r=>setTimeout(r,160))}
-  setLiveStatus(els,{status:'connected',username:'liveplus_teste'});notice('✅ Simulação concluída. Interface, eventos e regras responderam sem abrir Live.','ok');
+  setLiveStatus(els,{status:'connected',username:'liveplus_teste'});diagnostics.log('SIMULAÇÃO DO PAINEL OK','interface, eventos e regras responderam localmente','ok');diagnostics.render();notice('✅ Simulação concluída. Interface, eventos e regras responderam sem abrir Live.','ok');
   if(!originalAutomation)engine.saveSettings({automation:false});
 };
 
