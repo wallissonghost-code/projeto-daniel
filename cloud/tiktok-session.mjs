@@ -1,5 +1,5 @@
 import {TikTokLiveConnection,WebcastEvent} from 'tiktok-live-connector';
-import {cleanUsername,commentOf,likeCountOf,normalizeGift,normalizeCatalog,safeSend,userOf} from './protocol.mjs';
+import {cleanUsername,commentOf,likeCountOf,normalizeGift,safeSend,userOf} from './protocol.mjs';
 import {classifyTikTokError,normalizeModernConnectError,reconnectDelayMs} from './tiktok-resilience.mjs';
 
 const LIKE_FLUSH_MS=800;
@@ -71,8 +71,4 @@ export class TikTokSession{
   }
   async disconnect(){const s=this.state;s.manualStop=true;this.clearRecovery();s.recoveryAttempt=0;s.wantedUsername='';s.hadConnected=false;await this.dispose({clearUser:true,bump:true});this.status({status:'disconnected',manual:true})}
   ping(){return{type:'pong',at:Date.now(),mode:this.mode,username:this.state.username||this.state.wantedUsername,tiktokConnected:this.state.connected,reconnecting:Boolean(this.state.recoveryTimer),attempt:this.state.recoveryAttempt,maxAttempts:MAX_RECOVERY_ATTEMPTS,lastEventAt:this.state.lastEventAt,lastSignal:this.state.lastSignal}}
-  async giftCatalog(rawUsername=''){
-    const username=cleanUsername(rawUsername||this.state.username||this.state.wantedUsername);if(!username)throw Error('Informe o @ da Live para capturar presentes.');let live=this.state.live,owned=false;if(!live||typeof live.fetchAvailableGifts!=='function'){live=this.makeLive(username);owned=true}
-    try{if(owned)await live.connect();if(typeof live.fetchAvailableGifts!=='function')throw Error('Connector não expõe fetchAvailableGifts().');let raw;try{raw=await live.fetchAvailableGifts()}catch(e){const msg=String(e?.message||e);if(/roomid/i.test(msg)&&!owned){const fresh=this.makeLive(username);try{await fresh.connect();raw=await fresh.fetchAvailableGifts()}finally{try{fresh.removeAllListeners?.();await fresh.disconnect?.()}catch{}}}else throw e}const gifts=normalizeCatalog(raw,live);if(!gifts.length)throw Error('TikTok não retornou presentes para esta sala.');return gifts}finally{if(owned){try{live.removeAllListeners?.();await live.disconnect?.()}catch{}}}
-  }
 }
