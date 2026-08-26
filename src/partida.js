@@ -44,6 +44,18 @@ function startSession(){
 }
 function endSession(){cleanupPeer();code='';expiresAt=0;render();log('Sessão encerrada pelo painel.','warn')}
 function initTabs(){const tabs=[...document.querySelectorAll('[data-view-tab]')],views=[...document.querySelectorAll('[data-view]')];if(!tabs.length)return;const show=name=>{tabs.forEach(b=>b.classList.toggle('active',b.dataset.viewTab===name));views.forEach(v=>v.hidden=v.dataset.view!==name);try{sessionStorage.setItem('liveplus-view',name)}catch{}};tabs.forEach(b=>b.addEventListener('click',()=>show(b.dataset.viewTab)));show(sessionStorage.getItem('liveplus-view')||'live')}
+function initCollapsibleSections(){
+  const ids=['healthSection','engineSection','catalogSection','rulesSection'];
+  ids.forEach(id=>{
+    const section=$(id),head=section?.querySelector('.sectionHead');if(!section||!head||head.querySelector('.collapseToggle'))return;
+    section.classList.add('collapsibleCard','is-collapsed');
+    const existing=head.lastElementChild,tools=document.createElement('div');tools.className='sectionHeadTools';
+    if(existing&&existing.classList?.contains('badge'))tools.append(existing);
+    const button=document.createElement('button');button.type='button';button.className='collapseToggle';button.setAttribute('aria-expanded','false');button.innerHTML='ABRIR <span class="collapseArrow">⌄</span>';
+    button.addEventListener('click',()=>{const collapsed=section.classList.toggle('is-collapsed');button.setAttribute('aria-expanded',String(!collapsed));button.innerHTML=`${collapsed?'ABRIR':'OCULTAR'} <span class="collapseArrow">⌄</span>`});
+    tools.append(button);head.append(tools);
+  });
+}
 window.LivePlusMatch={start:startSession,end:endSession,getCode:()=>code,getManifest:()=>manifest,send:data=>{if(!activeConn?.open)return false;try{activeConn.send(data);return true}catch{return false}}};
-window.addEventListener('load',()=>{initTabs();render();$('newMatchCode')?.addEventListener('click',startSession);$('endMatchSession')?.addEventListener('click',endSession)});
+window.addEventListener('load',()=>{initTabs();initCollapsibleSections();render();$('newMatchCode')?.addEventListener('click',startSession);$('endMatchSession')?.addEventListener('click',endSession)});
 })();
