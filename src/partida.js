@@ -11,6 +11,7 @@ const peerId=()=>`liveplus-session-${code.replace(/-/g,'').toLowerCase()}`;
 function setState(text,kind=''){const el=$('matchCodeState');if(!el)return;el.textContent=text;el.className='matchCodeState '+kind}
 function render(){
   if($('matchCode'))$('matchCode').textContent=code||'—';
+  const copyButton=$('copyMatchCode');if(copyButton)copyButton.disabled=!code;
   if($('matchExpires')){const left=Math.max(0,expiresAt-Date.now());$('matchExpires').textContent=activeConn?.open?'CÓDIGO CONSUMIDO':left?`${Math.ceil(left/60000)} MIN`:'EXPIRADO'}
   if($('matchController'))$('matchController').textContent=activeConn?.open?'1 JOGO':'0 JOGOS';
   if($('matchPeer'))$('matchPeer').textContent=lockedPeer||'—';
@@ -43,6 +44,8 @@ function startSession(){
   timer=setInterval(()=>{if(!activeConn?.open&&expiresAt&&Date.now()>expiresAt){log('Código temporário expirou. Gere uma nova sessão.','warn');cleanupPeer();code='';expiresAt=0}if(lockedPeer&&graceUntil&&Date.now()>graceUntil&&!activeConn?.open){lockedPeer='';sessionToken='';graceUntil=0;log('Reserva de reconexão liberada.','warn')}render()},1000);
 }
 function endSession(){cleanupPeer();code='';expiresAt=0;render();log('Sessão encerrada pelo painel.','warn')}
+async function copyMatchCode(){if(!code)return;let ok=false;try{await navigator.clipboard.writeText(code);ok=true}catch{}if(!ok){try{const ta=document.createElement('textarea');ta.value=code;ta.setAttribute('readonly','');ta.style.position='fixed';ta.style.opacity='0';document.body.append(ta);ta.select();ok=document.execCommand('copy');ta.remove()}catch{}}const button=$('copyMatchCode');if(!button)return;button.classList.toggle('copied',ok);button.innerHTML=ok?'<span aria-hidden="true">✓</span>':'<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="11" rx="2"></rect><rect x="5" y="5" width="11" height="11" rx="2"></rect></svg>';button.setAttribute('aria-label',ok?'Código copiado':'Copiar código da partida');if(ok)setTimeout(()=>{button.classList.remove('copied');button.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="11" rx="2"></rect><rect x="5" y="5" width="11" height="11" rx="2"></rect></svg>';button.setAttribute('aria-label','Copiar código da partida')},1600)}
+function initCopyCode(){const value=$('matchCode');if(!value||$('copyMatchCode'))return;const row=document.createElement('div');row.className='matchCodeCopyRow';value.parentNode.insertBefore(row,value);row.append(value);const button=document.createElement('button');button.type='button';button.id='copyMatchCode';button.className='matchCodeCopy';button.setAttribute('aria-label','Copiar código da partida');button.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="11" rx="2"></rect><rect x="5" y="5" width="11" height="11" rx="2"></rect></svg>';button.disabled=!code;button.addEventListener('click',copyMatchCode);row.append(button)}
 function initTabs(){const tabs=[...document.querySelectorAll('[data-view-tab]')],views=[...document.querySelectorAll('[data-view]')];if(!tabs.length)return;const show=name=>{tabs.forEach(b=>b.classList.toggle('active',b.dataset.viewTab===name));views.forEach(v=>v.hidden=v.dataset.view!==name);try{sessionStorage.setItem('liveplus-view',name)}catch{}};tabs.forEach(b=>b.addEventListener('click',()=>show(b.dataset.viewTab)));show(sessionStorage.getItem('liveplus-view')||'live')}
 function initCollapsibleSections(){
   const ids=['healthSection','engineSection','catalogSection','rulesSection'];
@@ -57,5 +60,5 @@ function initCollapsibleSections(){
   });
 }
 window.LivePlusMatch={start:startSession,end:endSession,getCode:()=>code,getManifest:()=>manifest,send:data=>{if(!activeConn?.open)return false;try{activeConn.send(data);return true}catch{return false}}};
-window.addEventListener('load',()=>{initTabs();initCollapsibleSections();render();$('newMatchCode')?.addEventListener('click',startSession);$('endMatchSession')?.addEventListener('click',endSession)});
+window.addEventListener('load',()=>{initTabs();initCollapsibleSections();initCopyCode();render();$('newMatchCode')?.addEventListener('click',startSession);$('endMatchSession')?.addEventListener('click',endSession)});
 })();
