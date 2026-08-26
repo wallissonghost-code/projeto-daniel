@@ -70,6 +70,12 @@ button{border-color:rgba(255,255,255,.11)!important}
 .kicker{color:#85858b!important;letter-spacing:.2em!important}
 .sectionDesc{color:#85858b!important}
 .matchCode{font-weight:900!important;letter-spacing:.15em!important}
+.matchCodeCopyRow{display:flex;align-items:center;gap:10px;min-width:0}
+.matchCodeCopy{width:42px;height:42px;min-width:42px;padding:0!important;display:grid;place-items:center;border-radius:12px!important;background:#141416!important;border:1px solid rgba(255,255,255,.12)!important;color:#f2f2f4!important;transition:background .18s ease,border-color .18s ease,color .18s ease,transform .18s ease}
+.matchCodeCopy svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.8}
+.matchCodeCopy:active{transform:scale(.95)}
+.matchCodeCopy:disabled{opacity:.28;pointer-events:none}
+.matchCodeCopy.copied{color:var(--status-ok)!important;border-color:rgba(52,216,120,.3)!important;background:rgba(52,216,120,.07)!important;font-size:20px;font-weight:900}
 .matchHint{border-top-color:rgba(255,255,255,.12)!important}
 footer{border-top:1px solid rgba(255,255,255,.04);padding-top:22px!important}
 
@@ -78,4 +84,6 @@ footer{border-top:1px solid rgba(255,255,255,.04);padding-top:22px!important}
   .collapsibleCard.is-collapsed{border-radius:15px!important}
   .sectionHeadTools{max-width:52%!important}
   .viewTab{min-height:42px!important}
+  .matchCodeCopy{width:38px;height:38px;min-width:38px;border-radius:11px!important}
+  .matchCodeCopy svg{width:19px;height:19px}
 }
