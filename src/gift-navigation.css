@@ -1,0 +1,7 @@
+/* Visual cue only: helps users understand where a verified gift is configured. */
+#rulesSection.ruleFocusPulse{animation:ruleFocusPulse 1.5s ease-out}
+@keyframes ruleFocusPulse{
+  0%{box-shadow:0 0 0 0 rgba(255,255,255,.22),0 18px 45px rgba(0,0,0,.28)}
+  45%{box-shadow:0 0 0 4px rgba(255,255,255,.08),0 18px 45px rgba(0,0,0,.28)}
+  100%{box-shadow:0 0 0 0 rgba(255,255,255,0),0 18px 45px rgba(0,0,0,.28)}
+}
