@@ -101,7 +101,7 @@
     </section>
 
     <section class="card" id="rulesSection" data-view="live">
-      <div class="sectionHead"><div><div class="kicker">05 · REGRAS</div><h2>Gatilhos universais</h2><p class="sectionDesc">Cada evento mostra apenas a configuração que realmente usa.</p></div><span class="badge purpleBadge">UNIVERSAL</span></div>
+      <div class="sectionHead"><div><div class="kicker">05 · REGRAS</div><h2>Gatilhos universais</h2><p class="sectionDesc">Cada evento mostra apenas a configuração que realmente usa.</p></div><button class="badge purpleBadge" id="exportGamePreset" type="button">SALVAR PRESET</button></div>
       <div class="infoBanner"><b>EVENTOS DISPONÍVEIS</b><span>Presente específico · valor mínimo · qualquer presente verificado · curtidas · seguidor · compartilhamento · comentário</span></div>
       <div class="grid2 formGrid">
         <label class="field"><span>EVENTO</span><select id="ruleTrigger"><option value="gift">🎁 Presente específico</option><option value="giftvalue">💎 Valor da doação</option><option value="giftany">🎁 Qualquer presente verificado</option><option value="like">❤️ Curtidas</option><option value="follow">➕ Novo seguidor</option><option value="share">↗ Compartilhou a Live</option><option value="chat">💬 Comentário</option></select></label>
@@ -119,6 +119,7 @@
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <script src="./src/partida.js"></script>
   <script src="./src/gift-navigation.js"></script>
+  <script src="./src/preset-export.js"></script>
   <script type="module" src="./src/app.js"></script>
 </body>
 </html>
