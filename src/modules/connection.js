@@ -1,5 +1,11 @@
 export class ConnectorClient extends EventTarget{
-  constructor(){super();this.ws=null;this.endpoint='';this.connected=false;this.authenticated=false;this.lastPong=0;this.lastError=''}
+  constructor(){
+    super();this.ws=null;this.endpoint='';this.connected=false;this.authenticated=false;this.lastPong=0;this.lastError='';
+    if(typeof window!=='undefined'&&!window.__livePlusCloudOwner){
+      window.__livePlusCloudOwner=this;
+      window.addEventListener('liveplus-cloud-send',e=>{const payload=e?.detail;if(payload&&typeof payload==='object')this.send(payload)});
+    }
+  }
   emit(type,detail){this.dispatchEvent(new CustomEvent(type,{detail}))}
   validateEndpoint(endpoint){
     const value=String(endpoint||'').trim();
@@ -13,6 +19,7 @@ export class ConnectorClient extends EventTarget{
     this.disconnect();
     let validated;try{validated=this.validateEndpoint(endpoint)}catch(error){return Promise.reject(error)}
     this.endpoint=validated;this.lastError='';
+    try{if(typeof window!=='undefined'&&window.__livePlusCloudOwner===this)localStorage.setItem('liveplus-relay-endpoint',validated)}catch{}
     return new Promise((resolve,reject)=>{
       let settled=false,opened=false,authSeen=false;
       const fail=(message,error)=>{this.lastError=message;this.connected=false;this.authenticated=false;this.emit('cloud',{online:false,error:message});if(!settled){settled=true;clearTimeout(timer);reject(error||new Error(message))}};
@@ -21,7 +28,7 @@ export class ConnectorClient extends EventTarget{
       this.ws=ws;
       ws.onopen=()=>{opened=true;this.connected=true;this.emit('cloud',{online:true,stage:'socket'});try{ws.send(JSON.stringify({type:'auth',key:String(key||'')}))}catch(error){fail('Falha ao enviar autenticação.',error)}};
       ws.onerror=()=>fail('Falha de rede/WebSocket. Confira endereço, HTTPS/WSS e servidor online.');
-      ws.onclose=event=>{this.connected=false;this.authenticated=false;this.emit('cloud',{online:false,code:event.code,reason:event.reason||''});if(!settled)fail(`Conexão encerrada antes de autenticar${event.code?` (código ${event.code})`:''}.`)};
+      ws.onclose=event=>{this.connected=false;this.authenticated=false;this.emit('cloud',{online:false,code:event.code,reason:event.reason||''});if(typeof window!=='undefined'&&window.__livePlusCloudOwner===this)window.dispatchEvent(new CustomEvent('liveplus-cloud-state',{detail:{online:false}}));if(!settled)fail(`Conexão encerrada antes de autenticar${event.code?` (código ${event.code})`:''}.`)};
       ws.onmessage=ev=>{
         let m;try{m=JSON.parse(ev.data)}catch{return}
         if(m.type==='auth'){
@@ -32,6 +39,10 @@ export class ConnectorClient extends EventTarget{
         }
         if(m.type==='bridge'&&m.authRequired===false&&!authSeen){authSeen=true;this.authenticated=true;clearTimeout(timer);if(!settled){settled=true;resolve(true)}this.emit('cloud',{online:true,authenticated:true})}
         if(m.type==='pong')this.lastPong=Date.now();
+        if(typeof window!=='undefined'&&window.__livePlusCloudOwner===this){
+          window.dispatchEvent(new CustomEvent('liveplus-cloud-message',{detail:m}));
+          if((m.type==='auth'&&m.ok)||(m.type==='bridge'&&m.authRequired===false))window.dispatchEvent(new CustomEvent('liveplus-cloud-state',{detail:{online:true,authenticated:true,endpoint:this.endpoint}}));
+        }
         this.emit('message',m);this.emit(m.type,m);
       };
     })
