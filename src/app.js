@@ -29,13 +29,23 @@ function syncGameRuleVisuals(){
   const payload=rules.map(r=>({actionId:r.actionId,trigger:r.trigger,giftId:r.giftId||'',giftName:r.giftName||'',giftIcon:r.giftIcon||'',giftValue:Number(r.giftValue)||0,quantity:Number(r.quantity)||1,commentText:r.commentText||'',actionParams:r.actionParams&&typeof r.actionParams==='object'?structuredClone(r.actionParams):{}}));
   return window.LivePlusMatch?.send?.({type:'rules_sync',gameId:manifest.gameId,rules:payload,at:Date.now()})||false;
 }
+async function ensureOfficialPreset(manifest){
+  const gameId=String(manifest?.gameId||'').trim();if(!gameId)return{loaded:false};
+  if(engine.rules.some(r=>String(r.gameId||'')===gameId))return{loaded:false,reason:'local'};
+  try{
+    const response=await fetch(`./data/presets/${encodeURIComponent(gameId)}.json`,{cache:'no-store'});if(!response.ok)return{loaded:false,reason:'missing'};
+    const preset=await response.json();if(preset?.format!=='liveplus-game-preset'||String(preset?.game?.id||'')!==gameId||!Array.isArray(preset.rules)||!preset.rules.length)return{loaded:false,reason:'invalid'};
+    let loaded=0;for(const raw of preset.rules){if(String(raw?.gameId||gameId)!==gameId||!raw?.actionId)continue;const rule={...raw,id:crypto.randomUUID?.()||`${Date.now()}-${loaded}`,gameId,gameName:String(raw.gameName||preset.game?.name||manifest.name||''),gameIcon:String(raw.gameIcon||preset.game?.icon||manifest.icon||'')};engine.saveRule(rule);loaded++}
+    return{loaded:loaded>0,count:loaded,preset};
+  }catch(error){console.warn('Official preset unavailable',gameId,error);return{loaded:false,reason:'error'}}
+}
 function resetRuleForm(){editingRuleId='';els.ruleTrigger.value='gift';els.ruleGift.value='';els.ruleQuantity.value='1';els.ruleCommentText.value='';els.ruleCooldown.value='2';syncRuleForm();gameBridge.render(els)}
 function editRule(id){const rule=engine.rules.find(r=>r.id===id);if(!rule)return;editingRuleId=rule.id;els.ruleTrigger.value=rule.trigger;els.ruleGift.value=rule.giftId||rule.giftName||'';els.ruleQuantity.value=rule.quantity||1;els.ruleCommentText.value=rule.commentText||'';els.ruleCooldown.value=rule.cooldown??2;syncRuleForm();gameBridge.render(els,rule.actionId,rule.actionParams||{});els.rulesSection.scrollIntoView({behavior:'smooth',block:'start'})}
 async function loadMasterCatalog(){try{const response=await fetch('./data/verified-gifts.json',{cache:'no-store'});if(!response.ok)throw new Error(`HTTP ${response.status}`);const data=await response.json(),gifts=Array.isArray(data?.gifts)?data.gifts:[];engine.setMasterCatalog(gifts)}catch(error){console.warn('Master gift catalog unavailable',error);engine.setMasterCatalog([])}}
 
 engine.addEventListener('state',redraw);
 engine.addEventListener('automation',e=>{const {rule,payload}=e.detail||{};if(rule?.actionId)gameBridge.send(rule,payload?.event)});
-gameBridge.addEventListener('manifest',e=>{gameBridge.render(els);notice(`🎮 ${e.detail.name} conectado · ${e.detail.actions.length} ações disponíveis.`,'ok');setTimeout(syncGameRuleVisuals,80)});
+gameBridge.addEventListener('manifest',async e=>{gameBridge.render(els);const imported=await ensureOfficialPreset(e.detail);gameBridge.render(els);if(imported.loaded)notice(`🎮 ${e.detail.name} conectado · preset oficial carregado (${imported.count} regras).`,'ok');else notice(`🎮 ${e.detail.name} conectado · ${e.detail.actions.length} ações disponíveis.`,'ok');setTimeout(syncGameRuleVisuals,80)});
 gameBridge.addEventListener('disconnected',()=>gameBridge.render(els));
 client.addEventListener('cloud',e=>{if(e.detail.online&&e.detail.authenticated)notice('Conector autenticado e pronto.','ok');else if(e.detail.online)notice('WebSocket aberto. Validando chave…');else if(e.detail.error)notice(e.detail.error,'error');redraw()});
 client.addEventListener('status',e=>{const m=e.detail;setLiveStatus(els,m);if(m.status==='connected'){startLocalLiveSession();notice(`TikTok conectada em @${String(m.username||els.username.value).replace(/^@/,'')}.`,'ok')}else if(['disconnected','offline'].includes(m.status)&&engine.stats.startedAt)finishLocalLiveSession()});
