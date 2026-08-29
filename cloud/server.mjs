@@ -29,6 +29,8 @@ wss.on('connection',ws=>{
   ws.on('message',async raw=>{
     let m;try{m=JSON.parse(raw.toString())}catch{return}
     if(m.type==='auth'){authenticated=!ACCESS_KEY||String(m.key||'')===ACCESS_KEY;return safeSend(ws,{type:'auth',ok:authenticated})}
+    // O jogo entra apenas por código temporário. Ele não recebe nem precisa da chave privada do TikTok Connector.
+    if(['relay_game_join','relay_game_message','relay_leave'].includes(m.type)){if(GameRelay.handle(ws,m))return}
     if(!authenticated)return safeSend(ws,{type:'error',message:'Chave do conector inválida.'});
     if(GameRelay.handle(ws,m))return;
     if(m.type==='connect')return session.connect(m.username);
