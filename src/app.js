@@ -26,7 +26,7 @@ function renderGiftPreview(){let p=document.getElementById('ruleGiftPreview');if
 function syncGameRuleVisuals(){
   const manifest=gameBridge.manifest;if(!manifest?.gameId)return false;
   const rules=engine.rules.filter(r=>r.gameId===manifest.gameId&&r.actionId);
-  const payload=rules.map(r=>({actionId:r.actionId,trigger:r.trigger,giftId:r.giftId||'',giftName:r.giftName||'',giftIcon:r.giftIcon||'',giftValue:Number(r.giftValue)||0,quantity:Number(r.quantity)||1,commentText:r.commentText||''}));
+  const payload=rules.map(r=>({actionId:r.actionId,trigger:r.trigger,giftId:r.giftId||'',giftName:r.giftName||'',giftIcon:r.giftIcon||'',giftValue:Number(r.giftValue)||0,quantity:Number(r.quantity)||1,commentText:r.commentText||'',actionParams:r.actionParams&&typeof r.actionParams==='object'?structuredClone(r.actionParams):{}}));
   return window.LivePlusMatch?.send?.({type:'rules_sync',gameId:manifest.gameId,rules:payload,at:Date.now()})||false;
 }
 function resetRuleForm(){editingRuleId='';els.ruleTrigger.value='gift';els.ruleGift.value='';els.ruleQuantity.value='1';els.ruleCommentText.value='';els.ruleCooldown.value='2';syncRuleForm();gameBridge.render(els)}
