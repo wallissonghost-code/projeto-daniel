@@ -1,21 +1,26 @@
 (()=>{'use strict';
-const SETTINGS_KEY='daniel.live.plus.v2.settings';
-const state={code:'',ready:false,game:false,transport:'websocket-relay-v1',socket:'offline',authenticated:false};
+const RELAY_KEY='liveplus-game-relay-endpoint';
+const LEGACY_RELAY_KEY='liveplus-relay-endpoint';
+const state={code:'',ready:false,game:false,transport:'websocket-relay-v1',socket:'offline',authenticated:false,endpoint:''};
 let ws=null,connectPromise=null,reconnectTimer=null,manualClose=false;
 const log=(text,tone='')=>{const out=document.getElementById('matchLog');if(!out)return;const row=document.createElement('div');row.className='matchLogItem '+tone;row.textContent=new Date().toLocaleTimeString('pt-BR')+' · '+text;out.prepend(row);while(out.children.length>12)out.lastChild.remove()};
 function currentCode(){return String(window.LivePlusMatch?.getCode?.()||'').trim().toUpperCase()}
-function readConfig(){
-  let saved={};try{saved=JSON.parse(localStorage.getItem(SETTINGS_KEY)||'{}')||{}}catch{}
-  const endpoint=String(document.getElementById('endpoint')?.value||localStorage.getItem('liveplus-relay-endpoint')||saved.endpoint||'').trim();
-  const key=String(document.getElementById('accessKey')?.value||saved.key||'');
-  return{endpoint,key};
-}
 function normalizeEndpoint(raw){try{const u=new URL(String(raw||''));if(!['ws:','wss:'].includes(u.protocol))return'';if(location.protocol==='https:'&&u.protocol==='ws:')u.protocol='wss:';return u.toString()}catch{return''}}
+function configuredEndpoint(){
+  try{
+    const q=new URLSearchParams(location.search).get('gameRelay');
+    const chosen=normalizeEndpoint(q||localStorage.getItem(RELAY_KEY)||window.LIVEPLUS_GAME_RELAY_ENDPOINT||'');
+    if(chosen){localStorage.setItem(RELAY_KEY,chosen);return chosen}
+    const legacy=normalizeEndpoint(localStorage.getItem(LEGACY_RELAY_KEY)||'');
+    return legacy;
+  }catch{return normalizeEndpoint(window.LIVEPLUS_GAME_RELAY_ENDPOINT||'')}
+}
+function configure(endpoint){const value=normalizeEndpoint(endpoint);if(!value)return false;try{localStorage.setItem(RELAY_KEY,value)}catch{}state.endpoint=value;return true}
 function refreshTransport(){
   const el=document.getElementById('matchTransport');if(!el)return;
   if(state.game)el.textContent='SERVIDOR ONLINE';
   else if(state.ready)el.textContent='SERVIDOR AGUARDANDO';
-  else if(state.socket==='connecting')el.textContent='SERVIDOR CONECTANDO';
+  else if(state.socket==='connecting'||state.socket==='authenticating')el.textContent='SERVIDOR CONECTANDO';
 }
 function send(payload){if(ws?.readyState!==WebSocket.OPEN||!state.authenticated)return false;try{ws.send(JSON.stringify(payload));return true}catch{return false}}
 function registerRoom(){const code=currentCode()||state.code;if(!code||!state.authenticated)return false;state.code=code;state.ready=false;state.game=false;const ok=send({type:'relay_panel_create',code,ttlMs:5*60*1000});refreshTransport();return ok}
@@ -31,7 +36,7 @@ function handleMessage(m){
   if(m.type==='bridge'&&m.authRequired===false){state.authenticated=true;state.socket='online';registerRoom();return}
   if(m.type==='auth'){
     state.authenticated=!!m.ok;
-    if(!m.ok){state.socket='auth-error';log('Relay servidor recusou a chave salva. WebRTC segue como fallback.','error');try{ws?.close()}catch{};return}
+    if(!m.ok){state.socket='auth-error';log('Relay servidor recusou autenticação. WebRTC segue como fallback.','error');try{ws?.close()}catch{};return}
     state.socket='online';registerRoom();return;
   }
   if(m.type==='relay_panel_ready'&&(!state.code||m.code===state.code)){state.code=m.code;state.ready=true;state.game=!!m.gameConnected;log('Relay do servidor pronto · '+m.code,'ok');refreshTransport();return}
@@ -43,9 +48,8 @@ function handleMessage(m){
 function scheduleReconnect(){if(manualClose||reconnectTimer||!currentCode())return;reconnectTimer=setTimeout(()=>{reconnectTimer=null;ensureSocket().catch(()=>{})},900)}
 function ensureSocket(){
   const code=currentCode();if(!code)return Promise.resolve(false);
-  const {endpoint,key}=readConfig(),target=normalizeEndpoint(endpoint);
-  if(!target){state.socket='unconfigured';refreshTransport();return Promise.resolve(false)}
-  try{localStorage.setItem('liveplus-relay-endpoint',target)}catch{}
+  const target=configuredEndpoint();state.endpoint=target;
+  if(!target){state.socket='unconfigured';refreshTransport();log('Relay dedicado ainda não configurado. WebRTC segue disponível.','warn');return Promise.resolve(false)}
   if(ws?.readyState===WebSocket.OPEN){if(state.authenticated)registerRoom();return Promise.resolve(true)}
   if(connectPromise)return connectPromise;
   manualClose=false;state.socket='connecting';state.authenticated=false;refreshTransport();
@@ -53,10 +57,10 @@ function ensureSocket(){
     let settled=false;const done=value=>{if(!settled){settled=true;resolve(value)}};
     try{ws=new WebSocket(target)}catch(error){state.socket='error';log('Relay servidor não abriu. WebRTC segue disponível.','warn');connectPromise=null;done(false);return}
     const timeout=setTimeout(()=>{if(!state.authenticated){state.socket='timeout';try{ws?.close()}catch{};done(false)}},6500);
-    ws.onopen=()=>{state.socket='authenticating';refreshTransport();try{ws.send(JSON.stringify({type:'auth',key}))}catch{}};
+    ws.onopen=()=>{state.socket='authenticating';refreshTransport()};
     ws.onmessage=ev=>{let m;try{m=JSON.parse(ev.data)}catch{return}handleMessage(m);if(state.authenticated){clearTimeout(timeout);done(true)}};
     ws.onerror=()=>{state.socket='error';refreshTransport();done(false)};
-    ws.onclose=()=>{clearTimeout(timeout);const hadRoom=state.ready||state.game;state.socket='offline';state.authenticated=false;state.ready=false;state.game=false;ws=null;connectPromise=null;refreshTransport();if(hadRoom&&!manualClose)log('Relay do servidor suspenso. A sessão continua registrada e será retomada ao voltar ao painel.','warn');scheduleReconnect();done(false)};
+    ws.onclose=()=>{clearTimeout(timeout);const hadRoom=state.ready||state.game;state.socket='offline';state.authenticated=false;state.ready=false;state.game=false;ws=null;connectPromise=null;refreshTransport();if(hadRoom&&!manualClose)log('Relay do servidor suspenso. A sessão será retomada ao voltar ao painel.','warn');scheduleReconnect();done(false)};
   }).finally(()=>{connectPromise=null});
   return connectPromise;
 }
@@ -76,6 +80,6 @@ window.addEventListener('load',()=>{
 });
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')resumeRelay()});
 window.addEventListener('pageshow',resumeRelay);window.addEventListener('online',resumeRelay);
-setInterval(()=>{if(state.ready||state.game||state.socket==='connecting')refreshTransport()},500);
-window.LivePlusServerRelay={create,leave,resume:resumeRelay,state:()=>({...state})};
+setInterval(()=>{if(state.ready||state.game||state.socket==='connecting'||state.socket==='authenticating')refreshTransport()},500);
+window.LivePlusServerRelay={create,leave,resume:resumeRelay,configure,state:()=>({...state}),endpoint:configuredEndpoint};
 })();
