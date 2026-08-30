@@ -13,11 +13,17 @@ const now=()=>Date.now();
 function getSession(code){
   const key=cleanCode(code);return sessions.get(key)||null;
 }
+function replayCached(session){
+  if(!alive(session?.panel))return;
+  if(alive(session.game))safeSend(session.panel,{type:'relay_game_connected',code:session.code,gameId:session.gameId||''});
+  if(session.manifest) safeSend(session.panel,{type:'relay_message',from:'game',code:session.code,payload:session.manifest});
+  if(session.lastState) safeSend(session.panel,{type:'relay_message',from:'game',code:session.code,payload:session.lastState});
+}
 function createSession(code,panel,options={}){
   const key=cleanCode(code);if(!validCode(key))return{ok:false,error:'Código de sessão inválido.'};
   const existing=sessions.get(key);
   if(existing&&existing.panel!==panel&&alive(existing.panel))return{ok:false,error:'Código de sessão já está em uso.'};
-  const session=existing||{code:key,createdAt:now(),game:null,gameId:'',manifest:null,lastGameSeen:0};
+  const session=existing||{code:key,createdAt:now(),game:null,gameId:'',manifest:null,lastState:null,lastGameSeen:0};
   session.panel=panel;session.expiresAt=now()+Number(options.ttlMs||DEFAULT_TTL_MS);session.panelSeen=now();sessions.set(key,session);
   return{ok:true,session};
 }
@@ -32,7 +38,9 @@ function relay(target,message){if(!alive(target))return false;safeSend(target,me
 function handle(ws,m){
   if(m.type==='relay_panel_create'){
     const result=createSession(m.code,ws,{ttlMs:m.ttlMs});
-    safeSend(ws,result.ok?{type:'relay_panel_ready',code:result.session.code,transport:'websocket-relay-v1',gameConnected:alive(result.session.game)}:{type:'relay_error',scope:'panel_create',message:result.error});return true;
+    safeSend(ws,result.ok?{type:'relay_panel_ready',code:result.session.code,transport:'websocket-relay-v1',gameConnected:alive(result.session.game)}:{type:'relay_error',scope:'panel_create',message:result.error});
+    if(result.ok)replayCached(result.session);
+    return true;
   }
   if(m.type==='relay_game_join'){
     const result=joinGame(m.code,ws,m.gameId);
@@ -45,7 +53,13 @@ function handle(ws,m){
   }
   if(m.type==='relay_game_message'){
     const s=getSession(m.code);if(!s||s.game!==ws){safeSend(ws,{type:'relay_error',scope:'game_message',message:'Sessão inválida.'});return true}
-    s.lastGameSeen=now();relay(s.panel,{type:'relay_message',from:'game',code:s.code,payload:m.payload??null});return true;
+    s.lastGameSeen=now();
+    const payload=m.payload??null;
+    if(payload&&typeof payload==='object'){
+      if(payload.type==='game_manifest')s.manifest=payload;
+      if(payload.type==='state')s.lastState=payload;
+    }
+    relay(s.panel,{type:'relay_message',from:'game',code:s.code,payload});return true;
   }
   if(m.type==='relay_leave'){
     detach(ws,m.code);return true;
