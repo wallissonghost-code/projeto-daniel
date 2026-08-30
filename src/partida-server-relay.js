@@ -1,85 +1,28 @@
 (()=>{'use strict';
-const RELAY_KEY='liveplus-game-relay-endpoint';
-const LEGACY_RELAY_KEY='liveplus-relay-endpoint';
-const state={code:'',ready:false,game:false,transport:'websocket-relay-v1',socket:'offline',authenticated:false,endpoint:''};
+const RELAY_KEY='liveplus-game-relay-endpoint',LEGACY_RELAY_KEY='liveplus-relay-endpoint',MODE_KEY='liveplus-game-transport-mode';
+const state={code:'',ready:false,game:false,transport:'websocket-relay-v1',socket:'offline',authenticated:false,endpoint:'',mode:'hybrid'};
 let ws=null,connectPromise=null,reconnectTimer=null,manualClose=false;
 const log=(text,tone='')=>{const out=document.getElementById('matchLog');if(!out)return;const row=document.createElement('div');row.className='matchLogItem '+tone;row.textContent=new Date().toLocaleTimeString('pt-BR')+' · '+text;out.prepend(row);while(out.children.length>12)out.lastChild.remove()};
-function currentCode(){return String(window.LivePlusMatch?.getCode?.()||'').trim().toUpperCase()}
+const currentCode=()=>String(window.LivePlusMatch?.getCode?.()||'').trim().toUpperCase();
 function normalizeEndpoint(raw){try{const u=new URL(String(raw||''));if(!['ws:','wss:'].includes(u.protocol))return'';if(location.protocol==='https:'&&u.protocol==='ws:')u.protocol='wss:';return u.toString()}catch{return''}}
-function configuredEndpoint(){
-  try{
-    const q=new URLSearchParams(location.search).get('gameRelay');
-    const chosen=normalizeEndpoint(q||localStorage.getItem(RELAY_KEY)||window.LIVEPLUS_GAME_RELAY_ENDPOINT||'');
-    if(chosen){localStorage.setItem(RELAY_KEY,chosen);return chosen}
-    const legacy=normalizeEndpoint(localStorage.getItem(LEGACY_RELAY_KEY)||'');
-    return legacy;
-  }catch{return normalizeEndpoint(window.LIVEPLUS_GAME_RELAY_ENDPOINT||'')}
-}
-function configure(endpoint){const value=normalizeEndpoint(endpoint);if(!value)return false;try{localStorage.setItem(RELAY_KEY,value)}catch{}state.endpoint=value;return true}
-function refreshTransport(){
-  const el=document.getElementById('matchTransport');if(!el)return;
-  if(state.game)el.textContent='SERVIDOR ONLINE';
-  else if(state.ready)el.textContent='SERVIDOR AGUARDANDO';
-  else if(state.socket==='connecting'||state.socket==='authenticating')el.textContent='SERVIDOR CONECTANDO';
-}
+function mode(){try{return localStorage.getItem(MODE_KEY)==='peer'?'peer':'hybrid'}catch{return'hybrid'}}
+function configuredEndpoint(){try{const q=new URLSearchParams(location.search).get('gameRelay')||new URLSearchParams(location.search).get('liveplusRelay');const chosen=normalizeEndpoint(q||localStorage.getItem(RELAY_KEY)||window.LIVEPLUS_GAME_RELAY_ENDPOINT||'');if(chosen){localStorage.setItem(RELAY_KEY,chosen);return chosen}return normalizeEndpoint(localStorage.getItem(LEGACY_RELAY_KEY)||'')}catch{return normalizeEndpoint(window.LIVEPLUS_GAME_RELAY_ENDPOINT||'')}}
+function configure(endpoint){const value=normalizeEndpoint(endpoint);if(!value)return false;try{localStorage.setItem(RELAY_KEY,value)}catch{}state.endpoint=value;syncUI();return true}
+function clearEndpoint(){try{localStorage.removeItem(RELAY_KEY)}catch{}state.endpoint='';closeSocket();syncUI()}
+function setMode(value){state.mode=value==='peer'?'peer':'hybrid';try{localStorage.setItem(MODE_KEY,state.mode)}catch{}if(state.mode==='peer')closeSocket();else if(currentCode())ensureSocket().catch(()=>{});syncUI();return state.mode}
+function syncUI(){state.mode=mode();state.endpoint=configuredEndpoint();const input=document.getElementById('gameRelayEndpoint'),field=document.getElementById('gameRelayField'),primary=document.getElementById('matchRelayPrimary'),backup=document.getElementById('matchRelayBackup');if(input&&document.activeElement!==input)input.value=state.endpoint;if(field)field.hidden=state.mode==='peer';document.querySelectorAll('[data-match-transport]').forEach(b=>b.classList.toggle('active',b.dataset.matchTransport===state.mode));if(primary)primary.textContent=state.mode==='peer'?'PRINCIPAL · WEBRTC':state.game?'PRINCIPAL · SERVIDOR ONLINE':state.endpoint?'PRINCIPAL · SERVIDOR PRONTO':'PRINCIPAL · SERVIDOR NÃO CONFIGURADO';if(backup)backup.textContent=state.mode==='peer'?'SEM SERVIDOR · CONEXÃO ANTIGA':'BACKUP · WEBRTC PRONTO';refreshTransport()}
+function refreshTransport(){const el=document.getElementById('matchTransport');if(!el)return;if(state.mode==='peer')return;if(state.game)el.textContent='SERVIDOR ONLINE';else if(state.ready)el.textContent='SERVIDOR AGUARDANDO';else if(state.socket==='connecting'||state.socket==='authenticating')el.textContent='SERVIDOR CONECTANDO'}
 function send(payload){if(ws?.readyState!==WebSocket.OPEN||!state.authenticated)return false;try{ws.send(JSON.stringify(payload));return true}catch{return false}}
-function registerRoom(){const code=currentCode()||state.code;if(!code||!state.authenticated)return false;state.code=code;state.ready=false;state.game=false;const ok=send({type:'relay_panel_create',code,ttlMs:5*60*1000});refreshTransport();return ok}
-function handleGamePayload(data){
-  if(!data||typeof data!=='object')return;
-  if(data.type==='game_manifest'){window.dispatchEvent(new CustomEvent('liveplus-game-manifest',{detail:data.manifest||data}));return}
-  if(data.type==='state'){window.dispatchEvent(new CustomEvent('liveplus-game-state',{detail:data}));return}
-  if(data.type==='event'){window.dispatchEvent(new CustomEvent('liveplus-game-event',{detail:data}));return}
-  window.dispatchEvent(new CustomEvent('liveplus-game-message',{detail:data}));
-}
-function handleMessage(m){
-  if(!m||typeof m!=='object')return;
-  if(m.type==='bridge'&&m.authRequired===false){state.authenticated=true;state.socket='online';registerRoom();return}
-  if(m.type==='auth'){
-    state.authenticated=!!m.ok;
-    if(!m.ok){state.socket='auth-error';log('Relay servidor recusou autenticação. WebRTC segue como fallback.','error');try{ws?.close()}catch{};return}
-    state.socket='online';registerRoom();return;
-  }
-  if(m.type==='relay_panel_ready'&&(!state.code||m.code===state.code)){state.code=m.code;state.ready=true;state.game=!!m.gameConnected;log('Relay do servidor pronto · '+m.code,'ok');refreshTransport();return}
-  if(m.type==='relay_game_connected'&&m.code===state.code){state.ready=true;state.game=true;log('Jogo conectado pelo servidor.','ok');refreshTransport();return}
-  if(m.type==='relay_game_disconnected'&&m.code===state.code){state.game=false;log('Jogo saiu do relay do servidor. WebRTC continua disponível.','warn');refreshTransport();window.dispatchEvent(new CustomEvent('liveplus-game-disconnected'));return}
-  if(m.type==='relay_message'&&m.from==='game'&&m.code===state.code){state.game=true;handleGamePayload(m.payload);refreshTransport();return}
-  if(m.type==='relay_error'&&String(m.scope||'').startsWith('panel')){log('Relay servidor · '+(m.message||'erro'),'error')}
-}
-function scheduleReconnect(){if(manualClose||reconnectTimer||!currentCode())return;reconnectTimer=setTimeout(()=>{reconnectTimer=null;ensureSocket().catch(()=>{})},900)}
-function ensureSocket(){
-  const code=currentCode();if(!code)return Promise.resolve(false);
-  const target=configuredEndpoint();state.endpoint=target;
-  if(!target){state.socket='unconfigured';refreshTransport();log('Relay dedicado ainda não configurado. WebRTC segue disponível.','warn');return Promise.resolve(false)}
-  if(ws?.readyState===WebSocket.OPEN){if(state.authenticated)registerRoom();return Promise.resolve(true)}
-  if(connectPromise)return connectPromise;
-  manualClose=false;state.socket='connecting';state.authenticated=false;refreshTransport();
-  connectPromise=new Promise(resolve=>{
-    let settled=false;const done=value=>{if(!settled){settled=true;resolve(value)}};
-    try{ws=new WebSocket(target)}catch(error){state.socket='error';log('Relay servidor não abriu. WebRTC segue disponível.','warn');connectPromise=null;done(false);return}
-    const timeout=setTimeout(()=>{if(!state.authenticated){state.socket='timeout';try{ws?.close()}catch{};done(false)}},6500);
-    ws.onopen=()=>{state.socket='authenticating';refreshTransport()};
-    ws.onmessage=ev=>{let m;try{m=JSON.parse(ev.data)}catch{return}handleMessage(m);if(state.authenticated){clearTimeout(timeout);done(true)}};
-    ws.onerror=()=>{state.socket='error';refreshTransport();done(false)};
-    ws.onclose=()=>{clearTimeout(timeout);const hadRoom=state.ready||state.game;state.socket='offline';state.authenticated=false;state.ready=false;state.game=false;ws=null;connectPromise=null;refreshTransport();if(hadRoom&&!manualClose)log('Relay do servidor suspenso. A sessão será retomada ao voltar ao painel.','warn');scheduleReconnect();done(false)};
-  }).finally(()=>{connectPromise=null});
-  return connectPromise;
-}
-async function create(){const code=currentCode();if(!code)return false;state.code=code;state.ready=false;state.game=false;await ensureSocket();if(state.authenticated)registerRoom();return state.ready||state.authenticated}
-function leave(){manualClose=true;clearTimeout(reconnectTimer);reconnectTimer=null;if(state.code&&state.authenticated)send({type:'relay_leave',code:state.code});state.code='';state.ready=false;state.game=false;state.authenticated=false;state.socket='offline';try{ws?.close()}catch{}ws=null;refreshTransport()}
-function resumeRelay(){if(!currentCode())return;manualClose=false;ensureSocket().catch(()=>{})}
-window.addEventListener('load',()=>{
-  const start=document.getElementById('newMatchCode'),end=document.getElementById('endMatchSession');
-  start?.addEventListener('click',()=>setTimeout(create,0));
-  end?.addEventListener('click',leave);
-  const match=window.LivePlusMatch;if(!match||match.__serverRelayWrapped)return;
-  const peerSend=match.send.bind(match),peerEnd=match.end.bind(match);
-  match.send=data=>{if(state.game&&state.code&&send({type:'relay_panel_message',code:state.code,payload:data}))return true;return peerSend(data)};
-  match.end=()=>{leave();return peerEnd()};
-  match.getTransport=()=>state.game?'server':state.ready?'server-waiting':'peer';
-  match.__serverRelayWrapped=true;
-});
-document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')resumeRelay()});
-window.addEventListener('pageshow',resumeRelay);window.addEventListener('online',resumeRelay);
-setInterval(()=>{if(state.ready||state.game||state.socket==='connecting'||state.socket==='authenticating')refreshTransport()},500);
-window.LivePlusServerRelay={create,leave,resume:resumeRelay,configure,state:()=>({...state}),endpoint:configuredEndpoint};
+function registerRoom(){const code=currentCode()||state.code;if(!code||!state.authenticated||state.mode==='peer')return false;state.code=code;state.ready=false;state.game=false;return send({type:'relay_panel_create',code,ttlMs:5*60*1000})}
+function handleGamePayload(data){if(!data||typeof data!=='object')return;if(data.type==='game_manifest'){window.dispatchEvent(new CustomEvent('liveplus-game-manifest',{detail:data.manifest||data}));return}if(data.type==='state'){window.dispatchEvent(new CustomEvent('liveplus-game-state',{detail:data}));return}if(data.type==='event'){window.dispatchEvent(new CustomEvent('liveplus-game-event',{detail:data}));return}window.dispatchEvent(new CustomEvent('liveplus-game-message',{detail:data}))}
+function handleMessage(m){if(!m||typeof m!=='object')return;if(m.type==='bridge'&&m.authRequired===false){state.authenticated=true;state.socket='online';registerRoom();return}if(m.type==='auth'){state.authenticated=!!m.ok;if(!m.ok){state.socket='auth-error';log('Relay recusou conexão. WebRTC segue como fallback.','warn');closeSocket();return}state.socket='online';registerRoom();return}if(m.type==='relay_panel_ready'&&(!state.code||m.code===state.code)){state.code=m.code;state.ready=true;state.game=!!m.gameConnected;log('Relay do servidor pronto · '+m.code,'ok');syncUI();return}if(m.type==='relay_game_connected'&&m.code===state.code){state.ready=true;state.game=true;log('Jogo conectado pelo servidor.','ok');syncUI();return}if(m.type==='relay_game_disconnected'&&m.code===state.code){state.game=false;log('Servidor perdeu o jogo · WebRTC permanece como fallback.','warn');syncUI();window.dispatchEvent(new CustomEvent('liveplus-game-disconnected'));return}if(m.type==='relay_message'&&m.from==='game'&&m.code===state.code){state.game=true;handleGamePayload(m.payload);syncUI();return}if(m.type==='relay_error'&&String(m.scope||'').startsWith('panel'))log('Relay servidor · '+(m.message||'erro')+' · WebRTC disponível','warn')}
+function closeSocket(){manualClose=true;clearTimeout(reconnectTimer);reconnectTimer=null;state.ready=false;state.game=false;state.authenticated=false;state.socket='offline';try{ws?.close()}catch{}ws=null;connectPromise=null}
+function scheduleReconnect(){if(manualClose||reconnectTimer||!currentCode()||mode()==='peer')return;reconnectTimer=setTimeout(()=>{reconnectTimer=null;ensureSocket().catch(()=>{})},1200)}
+function ensureSocket(){state.mode=mode();if(state.mode==='peer')return Promise.resolve(false);const code=currentCode();if(!code)return Promise.resolve(false);const target=configuredEndpoint();state.endpoint=target;if(!target){state.socket='unconfigured';syncUI();return Promise.resolve(false)}if(ws?.readyState===WebSocket.OPEN){if(state.authenticated)registerRoom();return Promise.resolve(true)}if(connectPromise)return connectPromise;manualClose=false;state.socket='connecting';state.authenticated=false;syncUI();connectPromise=new Promise(resolve=>{let settled=false;const done=v=>{if(!settled){settled=true;resolve(v)}};try{ws=new WebSocket(target)}catch{state.socket='error';log('Relay indisponível · usando WebRTC.','warn');connectPromise=null;done(false);return}const timeout=setTimeout(()=>{if(!state.authenticated){state.socket='timeout';log('Relay não respondeu · WebRTC continua ativo.','warn');try{ws?.close()}catch{}done(false)}},6500);ws.onopen=()=>{state.socket='authenticating';syncUI()};ws.onmessage=ev=>{let m;try{m=JSON.parse(ev.data)}catch{return}handleMessage(m);if(state.authenticated){clearTimeout(timeout);done(true)}};ws.onerror=()=>{state.socket='error';syncUI();done(false)};ws.onclose=()=>{clearTimeout(timeout);const had=state.ready||state.game;state.socket='offline';state.authenticated=false;state.ready=false;state.game=false;ws=null;connectPromise=null;if(had&&!manualClose)log('Relay caiu · WebRTC assumiu a sessão. Servidor reconectará automaticamente.','warn');syncUI();scheduleReconnect();done(false)}}).finally(()=>{connectPromise=null});return connectPromise}
+async function create(){state.mode=mode();const code=currentCode();if(!code||state.mode==='peer')return false;state.code=code;state.ready=false;state.game=false;await ensureSocket();if(state.authenticated)registerRoom();return state.ready||state.authenticated}
+function leave(){manualClose=true;if(state.code&&state.authenticated)send({type:'relay_leave',code:state.code});state.code='';closeSocket();syncUI()}
+function resumeRelay(){if(!currentCode()||mode()==='peer')return;manualClose=false;ensureSocket().catch(()=>{})}
+window.addEventListener('load',()=>{state.mode=mode();syncUI();const input=document.getElementById('gameRelayEndpoint');input?.addEventListener('change',()=>{const raw=input.value.trim();if(!raw){clearEndpoint();return}if(!configure(raw)){log('Endpoint do relay inválido. Use ws:// ou wss://.','error');input.value=configuredEndpoint();return}log('Relay da partida salvo neste navegador.','ok');if(currentCode()&&mode()==='hybrid'){manualClose=false;closeSocket();manualClose=false;ensureSocket().catch(()=>{})}});document.querySelectorAll('[data-match-transport]').forEach(btn=>btn.addEventListener('click',()=>{const next=setMode(btn.dataset.matchTransport);log(next==='peer'?'Modo somente WebRTC ativado.':'Modo servidor + WebRTC ativado.','ok')}));document.getElementById('newMatchCode')?.addEventListener('click',()=>setTimeout(create,0));document.getElementById('endMatchSession')?.addEventListener('click',leave);const match=window.LivePlusMatch;if(!match||match.__serverRelayWrapped)return;const peerSend=match.send.bind(match),peerEnd=match.end.bind(match);match.send=data=>{if(state.mode==='hybrid'&&state.game&&state.code&&send({type:'relay_panel_message',code:state.code,payload:data}))return true;return peerSend(data)};match.end=()=>{leave();return peerEnd()};match.getTransport=()=>state.game?'server':state.ready?'server-waiting':'peer';match.__serverRelayWrapped=true});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')resumeRelay()});window.addEventListener('pageshow',resumeRelay);window.addEventListener('online',resumeRelay);setInterval(()=>{if(state.ready||state.game||state.socket==='connecting'||state.socket==='authenticating')refreshTransport()},1000);
+window.LivePlusServerRelay={create,leave,resume:resumeRelay,configure,clearEndpoint,setMode,state:()=>({...state,mode:mode()}),endpoint:configuredEndpoint};
 })();
