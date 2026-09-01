@@ -39,7 +39,16 @@ export class LiveEngine extends EventTarget{
   profileInitialized(gameId=this.activeGameId){return !!gameId&&storage.profileInitialized(gameId)}
   markProfileInitialized(gameId=this.activeGameId,patch={}){if(!gameId)return null;const meta=storage.markProfileInitialized(gameId,patch);if(gameId===this.activeGameId&&!this.rules.some(r=>!r.__profileMarker))this.rules=[profileMarker(gameId)];return meta}
   resetSession(){this.stats={like:0,chat:0,follow:0,share:0,gift:0,last:null,startedAt:Date.now()};this.likeProgress.clear();this.emit('state',this.snapshot())}
-  setMasterCatalog(gifts=[]){const map=new Map();for(const raw of gifts){const id=raw.id==null?'':String(raw.id),name=String(raw.name||'Presente'),key=id||norm(name);if(!key)continue;map.set(key,{...raw,id:id||null,name,diamondCount:Math.max(0,Number(raw.diamondCount)||0),icon:String(raw.icon||''),masterVerified:true,liveVerified:true,liveDivergence:false,verifiedAt:Number(raw.verifiedAt)||Date.now()})}this.catalog=[...map.values()].sort((a,b)=>(a.diamondCount-b.diamondCount)||a.name.localeCompare(b.name));this.emit('catalog',this.catalog);this.emit('state',this.snapshot())}
+  setMasterCatalog(gifts=[]){
+    const map=new Map();
+    for(const raw of gifts){const id=raw.id==null?'':String(raw.id),name=String(raw.name||'Presente'),key=id||norm(name);if(!key)continue;map.set(key,{...raw,id:id||null,name,diamondCount:Math.max(0,Number(raw.diamondCount)||0),icon:String(raw.icon||''),masterVerified:true,liveVerified:true,liveDivergence:false,verifiedAt:Number(raw.verifiedAt)||Date.now()})}
+    this.catalog=[...map.values()].sort((a,b)=>(a.diamondCount-b.diamondCount)||a.name.localeCompare(b.name));
+    const migration=storage.migrateGiftReferences(this.catalog);
+    if(this.activeGameId){const loaded=storage.rulesForGame(this.activeGameId);this.rules=loaded.length?loaded:(storage.profileInitialized(this.activeGameId)?[profileMarker(this.activeGameId)]:[])}
+    this.emit('catalog',this.catalog);
+    if(migration.changedRules)this.emit('catalog-rule-migration',migration);
+    this.emit('state',this.snapshot());
+  }
   onMessage(m){if(m.type==='status'&&m.status==='connected'&&!this.stats.startedAt)this.stats.startedAt=Date.now();if(m.type==='status'&&(m.status==='offline'||(m.status==='disconnected'&&m.unexpected!==true)))this.stats.startedAt=0;const unfinishedStreak=m.type==='gift'&&Number(m.giftType)===1&&m.repeatEnd===false;if(['like','chat','follow','share','gift'].includes(m.type)&&!unfinishedStreak){if(this.settings.capture!==false)this.captureEvent(m);if(this.settings.automation&&this.activeGameId)this.runRules(m)}this.emit('message',m);this.emit('state',this.snapshot())}
   findGift(id,name){const sid=id==null?'':String(id),n=norm(name);return (sid&&this.catalog.find(g=>String(g.id||'')===sid))||(n&&this.catalog.find(g=>norm(g.name)===n))||null}
   captureEvent(m){if(m.type==='like')this.stats.like+=Math.max(1,Number(m.count)||1);else this.stats[m.type]=(this.stats[m.type]||0)+1;this.stats.last={...m,at:Date.now(),verifiedGift:m.type==='gift'?Boolean(this.findGift(m.giftId,m.gift)):undefined}}
