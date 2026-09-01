@@ -13,25 +13,36 @@ const now=()=>Date.now();
 function getSession(code){
   const key=cleanCode(code);return sessions.get(key)||null;
 }
+function newSession(code){
+  return{code:cleanCode(code),createdAt:now(),panel:null,game:null,gameId:'',manifest:null,lastState:null,lastGameSeen:0,panelSeen:0,expiresAt:now()+DEFAULT_TTL_MS};
+}
 function replayCached(session){
   if(!alive(session?.panel))return;
   if(alive(session.game))safeSend(session.panel,{type:'relay_game_connected',code:session.code,gameId:session.gameId||''});
-  if(session.manifest) safeSend(session.panel,{type:'relay_message',from:'game',code:session.code,payload:session.manifest});
-  if(session.lastState) safeSend(session.panel,{type:'relay_message',from:'game',code:session.code,payload:session.lastState});
+  if(session.manifest)safeSend(session.panel,{type:'relay_message',from:'game',code:session.code,payload:session.manifest});
+  if(session.lastState)safeSend(session.panel,{type:'relay_message',from:'game',code:session.code,payload:session.lastState});
 }
 function createSession(code,panel,options={}){
   const key=cleanCode(code);if(!validCode(key))return{ok:false,error:'Código de sessão inválido.'};
   const existing=sessions.get(key);
   if(existing&&existing.panel!==panel&&alive(existing.panel))return{ok:false,error:'Código de sessão já está em uso.'};
-  const session=existing||{code:key,createdAt:now(),game:null,gameId:'',manifest:null,lastState:null,lastGameSeen:0};
+  const session=existing||newSession(key);
   session.panel=panel;session.expiresAt=now()+Number(options.ttlMs||DEFAULT_TTL_MS);session.panelSeen=now();sessions.set(key,session);
   return{ok:true,session};
 }
 function joinGame(code,game,gameId=''){
-  const session=getSession(code);if(!session)return{ok:false,error:'Sessão não encontrada.'};
-  if(session.expiresAt&&now()>session.expiresAt&&!alive(session.panel))return{ok:false,error:'Sessão expirada.'};
+  const key=cleanCode(code);if(!validCode(key))return{ok:false,error:'Código de sessão inválido.'};
+  let session=sessions.get(key);
+  if(!session){
+    session=newSession(key);
+    sessions.set(key,session);
+  }
+  if(session.expiresAt&&now()>session.expiresAt&&!alive(session.panel)&&!alive(session.game)){
+    session=newSession(key);
+    sessions.set(key,session);
+  }
   if(session.game&&session.game!==game&&alive(session.game))return{ok:false,error:'Sessão já possui um jogo conectado.'};
-  session.game=game;session.gameId=String(gameId||session.gameId||'');session.lastGameSeen=now();
+  session.game=game;session.gameId=String(gameId||session.gameId||'');session.lastGameSeen=now();session.expiresAt=Math.max(Number(session.expiresAt||0),now()+DEFAULT_TTL_MS);
   return{ok:true,session};
 }
 function relay(target,message){if(!alive(target))return false;safeSend(target,message);return true}
@@ -45,7 +56,7 @@ function handle(ws,m){
   if(m.type==='relay_game_join'){
     const result=joinGame(m.code,ws,m.gameId);
     if(!result.ok){safeSend(ws,{type:'relay_error',scope:'game_join',message:result.error});return true}
-    const s=result.session;safeSend(ws,{type:'relay_game_ready',code:s.code,transport:'websocket-relay-v1'});relay(s.panel,{type:'relay_game_connected',code:s.code,gameId:s.gameId});return true;
+    const s=result.session;safeSend(ws,{type:'relay_game_ready',code:s.code,transport:'websocket-relay-v1',panelConnected:alive(s.panel)});relay(s.panel,{type:'relay_game_connected',code:s.code,gameId:s.gameId});return true;
   }
   if(m.type==='relay_panel_message'){
     const s=getSession(m.code);if(!s||s.panel!==ws){safeSend(ws,{type:'relay_error',scope:'panel_message',message:'Sessão inválida.'});return true}
@@ -79,7 +90,7 @@ function sweep(){
     const panelGone=!alive(s.panel),gameGone=!alive(s.game);
     const expired=s.expiresAt&&t>s.expiresAt;
     const graceDone=gameGone&&s.lastGameSeen&&t-s.lastGameSeen>DEFAULT_GRACE_MS;
-    if((expired&&panelGone)||(panelGone&&gameGone&&graceDone))sessions.delete(code);
+    if((expired&&panelGone&&gameGone)||(panelGone&&gameGone&&graceDone))sessions.delete(code);
   }
 }
 const sweepTimer=setInterval(sweep,15000);sweepTimer.unref?.();
