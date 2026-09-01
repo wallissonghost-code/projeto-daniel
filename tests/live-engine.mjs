@@ -21,6 +21,7 @@ const client=new FakeClient(),engine=new LiveEngine(client);
 engine.setMasterCatalog([{id:'5655',name:'Rose',diamondCount:1,icon:'https://cdn.example.com/rose.png',verifiedAt:1}]);
 engine.saveSettings({automation:true,capture:true,endpoint:'',key:'',username:'qa-live'});
 engine.resetSession();
+engine.setActiveGame('qa-game');
 engine.saveRule({trigger:'gift',giftId:'5655',giftName:'Rose',quantity:1,cooldown:0});
 engine.saveRule({trigger:'giftany',quantity:1,cooldown:0});
 engine.saveRule({trigger:'giftvalue',quantity:2,cooldown:0});
