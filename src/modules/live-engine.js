@@ -17,8 +17,8 @@ export class LiveEngine extends EventTarget{
     storage.profiles();
     storage.setActiveGameId('');
     client.addEventListener('message',e=>this.onMessage(e.detail));
-    window.addEventListener('liveplus-game-manifest',e=>this.setActiveGame(e.detail?.gameId||e.detail?.id||''));
-    window.addEventListener('liveplus-game-disconnected',()=>this.setActiveGame(''));
+    globalThis.window?.addEventListener('liveplus-game-manifest',e=>this.setActiveGame(e.detail?.gameId||e.detail?.id||''));
+    globalThis.window?.addEventListener('liveplus-game-disconnected',()=>this.setActiveGame(''));
   }
   emit(type,detail){this.dispatchEvent(new CustomEvent(type,{detail}))}
   saveSettings(patch){this.settings={...this.settings,...patch};storage.saveSettings(this.settings);this.emit('state',this.snapshot())}
