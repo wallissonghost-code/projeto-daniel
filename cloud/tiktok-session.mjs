@@ -6,22 +6,44 @@ const LIKE_FLUSH_MS=800;
 const CHAT_BATCH_SIZE=24;
 const CHAT_QUEUE_WARN=120;
 const CHAT_QUEUE_HARD_MAX=3000;
+const SNIFFER_REPORT_MS=5000;
 const MAX_RECOVERY_ATTEMPTS=2;
 function onMany(live,names,handler){for(const name of [...new Set(names.filter(Boolean))])live.on(name,handler)}
 function firstText(values){for(const value of values){if(typeof value==='string'&&value.trim())return value.trim();if(typeof value==='number'&&Number.isFinite(value))return String(value)}return''}
 function fastUserOf(data={}){const user=data?.user||data?.userInfo||data?.author||{};return firstText([data.uniqueId,data.unique_id,data.uniqueID,data.userName,data.username,data.displayId,data.nickname,data.nickName,user.uniqueId,user.unique_id,user.uniqueID,user.userName,user.username,user.displayId,user.nickname,user.nickName])||userOf(data)}
 function fastCommentOf(data={}){const msg=data?.message||data?.chat||data?.commentInfo||{};return firstText([data.comment,data.content,data.text,data.msg,typeof data.message==='string'?data.message:'',msg.comment,msg.content,msg.text,msg.message,msg.msg])||commentOf(data)}
+function payloadShape(value){if(value==null)return String(value);if(Array.isArray(value))return`array(${value.length})`;if(typeof value!=='object')return typeof value;return Object.keys(value).slice(0,12).join(',')||'object'}
 
 export class TikTokSession{
   constructor(ws,{signApiKey='',onEvent=null}={}){
     this.ws=ws;this.signApiKey=signApiKey;this.onEvent=typeof onEvent==='function'?onEvent:null;
     this.mode=signApiKey?'modern-signed':'modern-direct';
-    this.state={live:null,username:'',wantedUsername:'',connecting:false,connected:false,generation:0,manualStop:true,hadConnected:false,recoveryTimer:null,recoveryAttempt:0,likeBuffer:new Map(),likeFlushTimer:null,chatQueue:[],chatFlushTimer:null,chatFlushing:false,chatReceived:0,chatDelivered:0,chatDropped:0,chatQueuePeak:0,lastEventAt:0,lastSignal:''};
+    this.state={live:null,username:'',wantedUsername:'',connecting:false,connected:false,generation:0,manualStop:true,hadConnected:false,recoveryTimer:null,recoveryAttempt:0,likeBuffer:new Map(),likeFlushTimer:null,chatQueue:[],chatFlushTimer:null,chatFlushing:false,chatReceived:0,chatDelivered:0,chatDropped:0,chatQueuePeak:0,snifferCounts:new Map(),snifferSeen:new Set(),snifferLastReportAt:0,lastEventAt:0,lastSignal:''};
   }
   status(extra={}){safeSend(this.ws,{type:'status',mode:this.mode,username:this.state.username||this.state.wantedUsername,...extra})}
   debug(event,data={}){safeSend(this.ws,{type:'debug',event,mode:this.mode,...data,at:Date.now()})}
   emitLive(payload){try{this.onEvent?.(payload)}catch(error){this.debug('SERVER_AUTOMATION_ERROR',{detail:String(error?.message||error).slice(0,500)})}safeSend(this.ws,payload)}
-  makeLive(username){const options={processInitialData:false,enableExtendedGiftInfo:false,fetchRoomInfoOnConnect:true,webClientOptions:{timeout:{request:12000}},wsClientOptions:{handshakeTimeout:12000}};if(this.signApiKey)options.signApiKey=this.signApiKey;return new TikTokLiveConnection(username,options)}
+  noteSnifferEvent(name,payload){
+    const s=this.state,key=String(name||'unknown'),next=(s.snifferCounts.get(key)||0)+1;
+    s.snifferCounts.set(key,next);
+    if(!s.snifferSeen.has(key)){
+      s.snifferSeen.add(key);
+      this.debug('TIKTOK_EVENT_VISTO',{eventName:key,payloadShape:payloadShape(payload)});
+    }
+    const now=Date.now();
+    if(now-s.snifferLastReportAt>=SNIFFER_REPORT_MS){
+      s.snifferLastReportAt=now;
+      const top=[...s.snifferCounts.entries()].sort((a,b)=>b[1]-a[1]).slice(0,12).map(([event,count])=>({event,count}));
+      this.debug('TIKTOK_EVENT_SNIFFER',{top,chat:{received:s.chatReceived,delivered:s.chatDelivered,dropped:s.chatDropped,queued:s.chatQueue.length}});
+    }
+  }
+  installEventSniffer(live){
+    if(!live||typeof live.emit!=='function'||live.__liveplusSniffer)return live;
+    const original=live.emit.bind(live);live.__liveplusSniffer=true;
+    live.emit=(name,...args)=>{try{this.noteSnifferEvent(name,args[0])}catch{}return original(name,...args)};
+    return live;
+  }
+  makeLive(username){const options={processInitialData:false,enableExtendedGiftInfo:false,fetchRoomInfoOnConnect:true,webClientOptions:{timeout:{request:12000}},wsClientOptions:{handshakeTimeout:12000}};if(this.signApiKey)options.signApiKey=this.signApiKey;return this.installEventSniffer(new TikTokLiveConnection(username,options))}
   touch(kind='event'){this.state.lastEventAt=Date.now();this.state.lastSignal=kind}
   clearRecovery(){if(this.state.recoveryTimer){clearTimeout(this.state.recoveryTimer);this.state.recoveryTimer=null}}
   clearLikes(){if(this.state.likeFlushTimer){clearTimeout(this.state.likeFlushTimer);this.state.likeFlushTimer=null}this.state.likeBuffer.clear()}
@@ -59,7 +81,7 @@ export class TikTokSession{
   async connect(raw,{recovery=false}={}){
     const username=cleanUsername(raw);if(!username){safeSend(this.ws,{type:'error',message:'Informe o @usuario da LIVE.'});return false}
     const s=this.state;if(s.connecting)return false;if(s.connected&&s.live&&!recovery){this.status({status:'connected'});return true}
-    if(!recovery){this.clearRecovery();s.manualStop=false;s.recoveryAttempt=0;s.hadConnected=false;s.wantedUsername=username;s.chatReceived=0;s.chatDelivered=0;s.chatDropped=0;s.chatQueuePeak=0}
+    if(!recovery){this.clearRecovery();s.manualStop=false;s.recoveryAttempt=0;s.hadConnected=false;s.wantedUsername=username;s.chatReceived=0;s.chatDelivered=0;s.chatDropped=0;s.chatQueuePeak=0;s.snifferCounts.clear();s.snifferSeen.clear();s.snifferLastReportAt=0}
     await this.dispose({clearUser:false,bump:true});const generation=s.generation;
     s.username=username;s.wantedUsername=username;s.connecting=true;s.connected=false;
     this.status({status:'checking',recovery,attempt:s.recoveryAttempt,maxAttempts:MAX_RECOVERY_ATTEMPTS});
@@ -87,5 +109,5 @@ export class TikTokSession{
     const username=s.wantedUsername;s.manualStop=false;s.hadConnected=true;this.debug('DIAGNOSTIC_DROP_TIKTOK',{username});await this.dispose({clearUser:false,bump:true});s.username=username;s.wantedUsername=username;this.status({status:'disconnected',reason:'Queda simulada pelo diagnóstico',unexpected:true,diagnostic:true});safeSend(this.ws,{type:'diagnostic_drop_result',ok:true,username});this.scheduleRecovery('Queda simulada pelo diagnóstico');return true;
   }
   async disconnect(){const s=this.state;s.manualStop=true;this.clearRecovery();s.recoveryAttempt=0;s.wantedUsername='';s.hadConnected=false;await this.dispose({clearUser:true,bump:true});this.status({status:'disconnected',manual:true})}
-  ping(){const s=this.state;return{type:'pong',at:Date.now(),mode:this.mode,username:s.username||s.wantedUsername,tiktokConnected:s.connected,reconnecting:Boolean(s.recoveryTimer),attempt:s.recoveryAttempt,maxAttempts:MAX_RECOVERY_ATTEMPTS,lastEventAt:s.lastEventAt,lastSignal:s.lastSignal,chat:{received:s.chatReceived,delivered:s.chatDelivered,dropped:s.chatDropped,queued:s.chatQueue.length,peak:s.chatQueuePeak}}}
+  ping(){const s=this.state;const events=[...s.snifferCounts.entries()].sort((a,b)=>b[1]-a[1]).slice(0,12).map(([event,count])=>({event,count}));return{type:'pong',at:Date.now(),mode:this.mode,username:s.username||s.wantedUsername,tiktokConnected:s.connected,reconnecting:Boolean(s.recoveryTimer),attempt:s.recoveryAttempt,maxAttempts:MAX_RECOVERY_ATTEMPTS,lastEventAt:s.lastEventAt,lastSignal:s.lastSignal,chat:{received:s.chatReceived,delivered:s.chatDelivered,dropped:s.chatDropped,queued:s.chatQueue.length,peak:s.chatQueuePeak},sniffer:{events}}}
 }
