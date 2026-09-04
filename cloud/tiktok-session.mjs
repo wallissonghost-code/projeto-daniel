@@ -22,7 +22,7 @@ export class TikTokSession{
   }
   status(extra={}){safeSend(this.ws,{type:'status',mode:this.mode,username:this.state.username||this.state.wantedUsername,...extra})}
   debug(event,data={}){safeSend(this.ws,{type:'debug',event,mode:this.mode,...data,at:Date.now()})}
-  emitLive(payload){try{this.onEvent?.(payload)}catch(error){this.debug('SERVER_AUTOMATION_ERROR',{detail:String(error?.message||error).slice(0,500)})}safeSend(this.ws,payload)}
+  emitLive(payload){const sentAt=Date.now(),outgoing={...payload,connectorReceivedAt:Number(payload?.connectorReceivedAt)||sentAt,connectorSentAt:sentAt};try{this.onEvent?.(outgoing)}catch(error){this.debug('SERVER_AUTOMATION_ERROR',{detail:String(error?.message||error).slice(0,500)})}safeSend(this.ws,outgoing)}
   noteSnifferEvent(name,payload){
     const s=this.state,key=String(name||'unknown'),next=(s.snifferCounts.get(key)||0)+1;
     s.snifferCounts.set(key,next);
@@ -48,16 +48,16 @@ export class TikTokSession{
   clearRecovery(){if(this.state.recoveryTimer){clearTimeout(this.state.recoveryTimer);this.state.recoveryTimer=null}}
   clearLikes(){if(this.state.likeFlushTimer){clearTimeout(this.state.likeFlushTimer);this.state.likeFlushTimer=null}this.state.likeBuffer.clear()}
   clearChats(){if(this.state.chatFlushTimer){clearTimeout(this.state.chatFlushTimer);this.state.chatFlushTimer=null}this.state.chatQueue.length=0;this.state.chatFlushing=false}
-  flushLikes(){this.state.likeFlushTimer=null;for(const item of this.state.likeBuffer.values())this.emitLive({type:'like',user:item.user,count:item.count,liveUser:this.state.username,passive:true});this.state.likeBuffer.clear()}
-  queueLike(data){this.touch('like');const user=fastUserOf(data),count=likeCountOf(data),key=String(user).toLowerCase(),prev=this.state.likeBuffer.get(key);if(prev)prev.count=Math.min(50000,prev.count+count);else this.state.likeBuffer.set(key,{user,count});if(!this.state.likeFlushTimer)this.state.likeFlushTimer=setTimeout(()=>this.flushLikes(),LIKE_FLUSH_MS)}
+  flushLikes(){this.state.likeFlushTimer=null;for(const item of this.state.likeBuffer.values())this.emitLive({type:'like',user:item.user,count:item.count,liveUser:this.state.username,passive:true,connectorReceivedAt:item.connectorReceivedAt});this.state.likeBuffer.clear()}
+  queueLike(data){this.touch('like');const receivedAt=Date.now(),user=fastUserOf(data),count=likeCountOf(data),key=String(user).toLowerCase(),prev=this.state.likeBuffer.get(key);if(prev){prev.count=Math.min(50000,prev.count+count);prev.connectorReceivedAt=Math.min(Number(prev.connectorReceivedAt)||receivedAt,receivedAt)}else this.state.likeBuffer.set(key,{user,count,connectorReceivedAt:receivedAt});if(!this.state.likeFlushTimer)this.state.likeFlushTimer=setTimeout(()=>this.flushLikes(),LIKE_FLUSH_MS)}
   scheduleChatFlush(){if(this.state.chatFlushTimer||this.state.chatFlushing)return;this.state.chatFlushTimer=setTimeout(()=>{this.state.chatFlushTimer=null;this.flushChats()},0)}
   queueChat(data){
     this.touch('chat');
-    const s=this.state,user=fastUserOf(data),comment=fastCommentOf(data);
+    const receivedAt=Date.now(),s=this.state,user=fastUserOf(data),comment=fastCommentOf(data);
     s.chatReceived++;
     if(!comment){s.chatDropped++;this.debug('CHAT_IGNORADO_SEM_TEXTO',{received:s.chatReceived,dropped:s.chatDropped});return}
     if(s.chatQueue.length>=CHAT_QUEUE_HARD_MAX){s.chatDropped++;if(s.chatDropped===1||s.chatDropped%25===0)this.debug('CHAT_QUEUE_SATURADA',{queued:s.chatQueue.length,received:s.chatReceived,delivered:s.chatDelivered,dropped:s.chatDropped});return}
-    s.chatQueue.push({type:'chat',user,comment,liveUser:s.username});
+    s.chatQueue.push({type:'chat',user,comment,liveUser:s.username,connectorReceivedAt:receivedAt});
     s.chatQueuePeak=Math.max(s.chatQueuePeak,s.chatQueue.length);
     if(s.chatQueue.length===CHAT_QUEUE_WARN||s.chatQueue.length===CHAT_QUEUE_WARN*2)this.debug('CHAT_QUEUE_ALTA',{queued:s.chatQueue.length,peak:s.chatQueuePeak,received:s.chatReceived,delivered:s.chatDelivered});
     this.scheduleChatFlush();
@@ -71,9 +71,9 @@ export class TikTokSession{
     const active=()=>this.state.live===live&&this.state.generation===generation;
     onMany(live,[WebcastEvent?.CHAT,'chat','comment'],d=>{if(!active())return;this.queueChat(d)});
     onMany(live,[WebcastEvent?.LIKE,'like'],d=>active()&&this.queueLike(d));
-    onMany(live,[WebcastEvent?.FOLLOW,'follow'],d=>{if(!active())return;this.touch('follow');this.emitLive({type:'follow',user:fastUserOf(d),liveUser:this.state.username})});
-    onMany(live,[WebcastEvent?.SHARE,'share'],d=>{if(!active())return;this.touch('share');this.emitLive({type:'share',user:fastUserOf(d),liveUser:this.state.username})});
-    onMany(live,[WebcastEvent?.GIFT,'gift'],d=>{if(!active())return;this.touch('gift');this.emitLive({...normalizeGift(d),liveUser:this.state.username})});
+    onMany(live,[WebcastEvent?.FOLLOW,'follow'],d=>{if(!active())return;this.touch('follow');this.emitLive({type:'follow',user:fastUserOf(d),liveUser:this.state.username,connectorReceivedAt:Date.now()})});
+    onMany(live,[WebcastEvent?.SHARE,'share'],d=>{if(!active())return;this.touch('share');this.emitLive({type:'share',user:fastUserOf(d),liveUser:this.state.username,connectorReceivedAt:Date.now()})});
+    onMany(live,[WebcastEvent?.GIFT,'gift'],d=>{if(!active())return;this.touch('gift');this.emitLive({...normalizeGift(d),liveUser:this.state.username,connectorReceivedAt:Date.now()})});
     live.on('disconnected',()=>{if(!active())return;this.state.live=null;this.state.connected=false;this.state.connecting=false;this.status({status:'disconnected',reason:'TikTok desconectou',unexpected:!this.state.manualStop});if(!this.state.manualStop&&this.state.hadConnected)this.scheduleRecovery('TikTok desconectou inesperadamente')});
     live.on('error',e=>active()&&this.debug('TIKTOK_ERROR',{detail:String(e?.message||e).slice(0,900)}));
   }
