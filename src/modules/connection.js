@@ -1,8 +1,10 @@
 const LIVE_EVENT_TYPES=new Set(['like','chat','gift','follow','share']);
+const CLIENT_ID_KEY='liveplus-connector-client-id-v1';
 const traceId=()=>`evt_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,8)}`;
+const loadClientId=()=>{try{let id=localStorage.getItem(CLIENT_ID_KEY)||'';if(!id){id=`panel_${crypto.randomUUID?.()||`${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`}`;localStorage.setItem(CLIENT_ID_KEY,id)}return id}catch{return`panel_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`}};
 export class ConnectorClient extends EventTarget{
   constructor(){
-    super();this.ws=null;this.endpoint='';this.accessKey='';this.connected=false;this.authenticated=false;this.lastPong=0;this.lastError='';
+    super();this.ws=null;this.endpoint='';this.accessKey='';this.clientId=loadClientId();this.connected=false;this.authenticated=false;this.lastPong=0;this.lastError='';
     this.wantConnected=false;this.wantedLive='';this.recoveryInFlight=false;this.recoveryTimer=null;this.isLifecycleOwner=false;
     if(typeof window!=='undefined'&&!window.__livePlusCloudOwner){
       window.__livePlusCloudOwner=this;this.isLifecycleOwner=true;
@@ -34,7 +36,7 @@ export class ConnectorClient extends EventTarget{
       const timer=setTimeout(()=>fail(opened&&!authSeen?'O conector abriu, mas não respondeu à autenticação.':'Tempo limite ao conectar ao WebSocket.'),7000);
       let ws;try{ws=new WebSocket(validated)}catch(error){clearTimeout(timer);return fail('Não foi possível abrir o WebSocket.',error)}
       this.ws=ws;
-      ws.onopen=()=>{if(this.ws!==ws)return;opened=true;this.connected=true;this.emit('cloud',{online:true,stage:'socket',recovery});try{ws.send(JSON.stringify({type:'auth',key:String(this.accessKey||key||'')}))}catch(error){fail('Falha ao enviar autenticação.',error)}};
+      ws.onopen=()=>{if(this.ws!==ws)return;opened=true;this.connected=true;this.emit('cloud',{online:true,stage:'socket',recovery});try{ws.send(JSON.stringify({type:'auth',key:String(this.accessKey||key||''),clientId:this.clientId}))}catch(error){fail('Falha ao enviar autenticação.',error)}};
       ws.onerror=()=>{if(this.ws===ws)fail('Falha de rede/WebSocket. Confira endereço, HTTPS/WSS e servidor online.')};
       ws.onclose=event=>{if(this.ws!==ws)return;this.connected=false;this.authenticated=false;this.emit('cloud',{online:false,code:event.code,reason:event.reason||'',background:typeof document!=='undefined'&&document.visibilityState!=='visible'});if(typeof window!=='undefined'&&window.__livePlusCloudOwner===this)window.dispatchEvent(new CustomEvent('liveplus-cloud-state',{detail:{online:false}}));if(!settled)fail(`Conexão encerrada antes de autenticar${event.code?` (código ${event.code})`:''}.`)};
       ws.onmessage=ev=>{
@@ -45,13 +47,13 @@ export class ConnectorClient extends EventTarget{
         }
         if(m.type==='auth'){
           authSeen=true;this.authenticated=!!m.ok;if(!m.ok)return fail('Chave do conector recusada.');
-          clearTimeout(timer);if(!settled){settled=true;resolve(true)}this.emit('cloud',{online:true,authenticated:true,recovery});
+          clearTimeout(timer);if(!settled){settled=true;resolve(true)}this.emit('cloud',{online:true,authenticated:true,recovery,persistentRuntime:!!m.persistentRuntime});
         }
-        if(m.type==='bridge'&&m.authRequired===false&&!authSeen){authSeen=true;this.authenticated=true;clearTimeout(timer);if(!settled){settled=true;resolve(true)}this.emit('cloud',{online:true,authenticated:true,recovery})}
+        if(m.type==='bridge'&&m.authRequired===false&&!authSeen){/* aguarda auth explícito para vincular runtime persistente */}
         if(m.type==='pong')this.lastPong=Date.now();
         if(typeof window!=='undefined'&&window.__livePlusCloudOwner===this){
           window.dispatchEvent(new CustomEvent('liveplus-cloud-message',{detail:m}));
-          if((m.type==='auth'&&m.ok)||(m.type==='bridge'&&m.authRequired===false))window.dispatchEvent(new CustomEvent('liveplus-cloud-state',{detail:{online:true,authenticated:true,endpoint:this.endpoint}}));
+          if(m.type==='auth'&&m.ok)window.dispatchEvent(new CustomEvent('liveplus-cloud-state',{detail:{online:true,authenticated:true,endpoint:this.endpoint,persistentRuntime:!!m.persistentRuntime}}));
         }
         this.emit('message',m);this.emit(m.type,m);
       };
