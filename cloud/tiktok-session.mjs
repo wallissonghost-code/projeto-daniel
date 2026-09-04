@@ -2,7 +2,7 @@ import {TikTokLiveConnection,WebcastEvent} from 'tiktok-live-connector';
 import {cleanUsername,commentOf,likeCountOf,normalizeGift,safeSend,userOf} from './protocol.mjs';
 import {classifyTikTokError,normalizeModernConnectError,reconnectDelayMs} from './tiktok-resilience.mjs';
 
-const LIKE_FLUSH_MS=800;
+const LIKE_FLUSH_MS=300;
 const CHAT_BATCH_SIZE=24;
 const CHAT_QUEUE_WARN=120;
 const CHAT_QUEUE_HARD_MAX=3000;
