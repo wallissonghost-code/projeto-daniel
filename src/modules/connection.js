@@ -1,3 +1,5 @@
+const LIVE_EVENT_TYPES=new Set(['like','chat','gift','follow','share']);
+const traceId=()=>`evt_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,8)}`;
 export class ConnectorClient extends EventTarget{
   constructor(){
     super();this.ws=null;this.endpoint='';this.connected=false;this.authenticated=false;this.lastPong=0;this.lastError='';
@@ -31,6 +33,12 @@ export class ConnectorClient extends EventTarget{
       ws.onclose=event=>{this.connected=false;this.authenticated=false;this.emit('cloud',{online:false,code:event.code,reason:event.reason||''});if(typeof window!=='undefined'&&window.__livePlusCloudOwner===this)window.dispatchEvent(new CustomEvent('liveplus-cloud-state',{detail:{online:false}}));if(!settled)fail(`Conexão encerrada antes de autenticar${event.code?` (código ${event.code})`:''}.`)};
       ws.onmessage=ev=>{
         let m;try{m=JSON.parse(ev.data)}catch{return}
+        if(LIVE_EVENT_TYPES.has(m.type)){
+          const receivedAt=Date.now();
+          m.traceId=String(m.traceId||traceId());
+          m.panelReceivedAt=Number(m.panelReceivedAt)||receivedAt;
+          m.connectorSentAt=Number(m.connectorSentAt)||Number(m.at)||0;
+        }
         if(m.type==='auth'){
           authSeen=true;this.authenticated=!!m.ok;
           if(!m.ok)return fail('Chave do conector recusada.');
