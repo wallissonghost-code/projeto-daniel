@@ -4,7 +4,7 @@ const norm=v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim
 const profileMarker=gameId=>({id:`__profile__:${gameId}`,gameId,__profileMarker:true,enabled:false});
 
 export class LiveEngine extends EventTarget{
-  constructor(client){this.client=client;super();this.settings=storage.settings();this.catalog=[];this.activeGameId='';this.rules=[];this.stats={like:0,chat:0,follow:0,share:0,gift:0,last:null,startedAt:0};this.cooldowns=new Map();this.likeProgress=new Map();storage.profiles();storage.setActiveGameId('');client.addEventListener('message',e=>this.onMessage(e.detail));globalThis.window?.addEventListener('liveplus-game-manifest',e=>this.setActiveGame(e.detail?.gameId||e.detail?.id||''));globalThis.window?.addEventListener('liveplus-game-disconnected',()=>this.setActiveGame(''))}
+  constructor(client){super();this.client=client;this.settings=storage.settings();this.catalog=[];this.activeGameId='';this.rules=[];this.stats={like:0,chat:0,follow:0,share:0,gift:0,last:null,startedAt:0};this.cooldowns=new Map();this.likeProgress=new Map();storage.profiles();storage.setActiveGameId('');client.addEventListener('message',e=>this.onMessage(e.detail));globalThis.window?.addEventListener('liveplus-game-manifest',e=>this.setActiveGame(e.detail?.gameId||e.detail?.id||''));globalThis.window?.addEventListener('liveplus-game-disconnected',()=>this.setActiveGame(''))}
   emit(type,detail){this.dispatchEvent(new CustomEvent(type,{detail}))}
   saveSettings(patch){this.settings={...this.settings,...patch};storage.saveSettings(this.settings);this.emit('state',this.snapshot())}
   snapshot(){return {settings:this.settings,catalog:this.catalog,rules:this.rules,activeGameId:this.activeGameId,stats:{...this.stats}}}
