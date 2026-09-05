@@ -24,25 +24,11 @@ export class TikTokSession{
   debug(event,data={}){safeSend(this.ws,{type:'debug',event,mode:this.mode,...data,at:Date.now()})}
   emitLive(payload){const sentAt=Date.now(),outgoing={...payload,connectorReceivedAt:Number(payload?.connectorReceivedAt)||sentAt,connectorSentAt:sentAt};try{this.onEvent?.(outgoing)}catch(error){this.debug('SERVER_AUTOMATION_ERROR',{detail:String(error?.message||error).slice(0,500)})}safeSend(this.ws,outgoing)}
   noteSnifferEvent(name,payload){
-    const s=this.state,key=String(name||'unknown'),next=(s.snifferCounts.get(key)||0)+1;
-    s.snifferCounts.set(key,next);
-    if(!s.snifferSeen.has(key)){
-      s.snifferSeen.add(key);
-      this.debug('TIKTOK_EVENT_VISTO',{eventName:key,payloadShape:payloadShape(payload)});
-    }
-    const now=Date.now();
-    if(now-s.snifferLastReportAt>=SNIFFER_REPORT_MS){
-      s.snifferLastReportAt=now;
-      const top=[...s.snifferCounts.entries()].sort((a,b)=>b[1]-a[1]).slice(0,12).map(([event,count])=>({event,count}));
-      this.debug('TIKTOK_EVENT_SNIFFER',{top,chat:{received:s.chatReceived,delivered:s.chatDelivered,dropped:s.chatDropped,queued:s.chatQueue.length}});
-    }
+    const s=this.state,key=String(name||'unknown'),next=(s.snifferCounts.get(key)||0)+1;s.snifferCounts.set(key,next);
+    if(!s.snifferSeen.has(key)){s.snifferSeen.add(key);this.debug('TIKTOK_EVENT_VISTO',{eventName:key,payloadShape:payloadShape(payload)})}
+    const now=Date.now();if(now-s.snifferLastReportAt>=SNIFFER_REPORT_MS){s.snifferLastReportAt=now;const top=[...s.snifferCounts.entries()].sort((a,b)=>b[1]-a[1]).slice(0,12).map(([event,count])=>({event,count}));this.debug('TIKTOK_EVENT_SNIFFER',{top,chat:{received:s.chatReceived,delivered:s.chatDelivered,dropped:s.chatDropped,queued:s.chatQueue.length}})}
   }
-  installEventSniffer(live){
-    if(!live||typeof live.emit!=='function'||live.__liveplusSniffer)return live;
-    const original=live.emit.bind(live);live.__liveplusSniffer=true;
-    live.emit=(name,...args)=>{try{this.noteSnifferEvent(name,args[0])}catch{}return original(name,...args)};
-    return live;
-  }
+  installEventSniffer(live){if(!live||typeof live.emit!=='function'||live.__liveplusSniffer)return live;const original=live.emit.bind(live);live.__liveplusSniffer=true;live.emit=(name,...args)=>{try{this.noteSnifferEvent(name,args[0])}catch{}return original(name,...args)};return live}
   makeLive(username){const options={processInitialData:false,enableExtendedGiftInfo:false,fetchRoomInfoOnConnect:true,webClientOptions:{timeout:{request:12000}},wsClientOptions:{handshakeTimeout:12000}};if(this.signApiKey)options.signApiKey=this.signApiKey;return this.installEventSniffer(new TikTokLiveConnection(username,options))}
   touch(kind='event'){this.state.lastEventAt=Date.now();this.state.lastSignal=kind}
   clearRecovery(){if(this.state.recoveryTimer){clearTimeout(this.state.recoveryTimer);this.state.recoveryTimer=null}}
@@ -51,63 +37,20 @@ export class TikTokSession{
   flushLikes(){this.state.likeFlushTimer=null;for(const item of this.state.likeBuffer.values())this.emitLive({type:'like',user:item.user,count:item.count,liveUser:this.state.username,passive:true,connectorReceivedAt:item.connectorReceivedAt});this.state.likeBuffer.clear()}
   queueLike(data){this.touch('like');const receivedAt=Date.now(),user=fastUserOf(data),count=likeCountOf(data),key=String(user).toLowerCase(),prev=this.state.likeBuffer.get(key);if(prev){prev.count=Math.min(50000,prev.count+count);prev.connectorReceivedAt=Math.min(Number(prev.connectorReceivedAt)||receivedAt,receivedAt)}else this.state.likeBuffer.set(key,{user,count,connectorReceivedAt:receivedAt});if(!this.state.likeFlushTimer)this.state.likeFlushTimer=setTimeout(()=>this.flushLikes(),LIKE_FLUSH_MS)}
   scheduleChatFlush(){if(this.state.chatFlushTimer||this.state.chatFlushing)return;this.state.chatFlushTimer=setTimeout(()=>{this.state.chatFlushTimer=null;this.flushChats()},0)}
-  queueChat(data){
-    this.touch('chat');
-    const receivedAt=Date.now(),s=this.state,user=fastUserOf(data),comment=fastCommentOf(data);
-    s.chatReceived++;
-    if(!comment){s.chatDropped++;this.debug('CHAT_IGNORADO_SEM_TEXTO',{received:s.chatReceived,dropped:s.chatDropped});return}
-    if(s.chatQueue.length>=CHAT_QUEUE_HARD_MAX){s.chatDropped++;if(s.chatDropped===1||s.chatDropped%25===0)this.debug('CHAT_QUEUE_SATURADA',{queued:s.chatQueue.length,received:s.chatReceived,delivered:s.chatDelivered,dropped:s.chatDropped});return}
-    s.chatQueue.push({type:'chat',user,comment,liveUser:s.username,connectorReceivedAt:receivedAt});
-    s.chatQueuePeak=Math.max(s.chatQueuePeak,s.chatQueue.length);
-    if(s.chatQueue.length===CHAT_QUEUE_WARN||s.chatQueue.length===CHAT_QUEUE_WARN*2)this.debug('CHAT_QUEUE_ALTA',{queued:s.chatQueue.length,peak:s.chatQueuePeak,received:s.chatReceived,delivered:s.chatDelivered});
-    this.scheduleChatFlush();
-  }
-  flushChats(){
-    const s=this.state;if(s.chatFlushing)return;s.chatFlushing=true;
-    try{let count=0;while(count<CHAT_BATCH_SIZE&&s.chatQueue.length){const item=s.chatQueue.shift();this.emitLive(item);s.chatDelivered++;count++}}
-    finally{s.chatFlushing=false;if(s.chatQueue.length)this.scheduleChatFlush()}
-  }
-  attach(live,generation){
-    const active=()=>this.state.live===live&&this.state.generation===generation;
-    onMany(live,[WebcastEvent?.CHAT,'chat','comment'],d=>{if(!active())return;this.queueChat(d)});
-    onMany(live,[WebcastEvent?.LIKE,'like'],d=>active()&&this.queueLike(d));
-    onMany(live,[WebcastEvent?.FOLLOW,'follow'],d=>{if(!active())return;this.touch('follow');this.emitLive({type:'follow',user:fastUserOf(d),liveUser:this.state.username,connectorReceivedAt:Date.now()})});
-    onMany(live,[WebcastEvent?.SHARE,'share'],d=>{if(!active())return;this.touch('share');this.emitLive({type:'share',user:fastUserOf(d),liveUser:this.state.username,connectorReceivedAt:Date.now()})});
-    onMany(live,[WebcastEvent?.GIFT,'gift'],d=>{if(!active())return;this.touch('gift');this.emitLive({...normalizeGift(d),liveUser:this.state.username,connectorReceivedAt:Date.now()})});
-    live.on('disconnected',()=>{if(!active())return;this.state.live=null;this.state.connected=false;this.state.connecting=false;this.status({status:'disconnected',reason:'TikTok desconectou',unexpected:!this.state.manualStop});if(!this.state.manualStop&&this.state.hadConnected)this.scheduleRecovery('TikTok desconectou inesperadamente')});
-    live.on('error',e=>active()&&this.debug('TIKTOK_ERROR',{detail:String(e?.message||e).slice(0,900)}));
-  }
+  queueChat(data){const receivedAt=Date.now(),s=this.state,user=fastUserOf(data),comment=fastCommentOf(data);this.touch('chat');s.chatReceived++;if(!comment){s.chatDropped++;this.debug('CHAT_IGNORADO_SEM_TEXTO',{received:s.chatReceived,dropped:s.chatDropped});return}if(s.chatQueue.length>=CHAT_QUEUE_HARD_MAX){s.chatDropped++;if(s.chatDropped===1||s.chatDropped%25===0)this.debug('CHAT_QUEUE_SATURADA',{queued:s.chatQueue.length,received:s.chatReceived,delivered:s.chatDelivered,dropped:s.chatDropped});return}s.chatQueue.push({type:'chat',user,comment,liveUser:s.username,connectorReceivedAt:receivedAt});s.chatQueuePeak=Math.max(s.chatQueuePeak,s.chatQueue.length);if(s.chatQueue.length===CHAT_QUEUE_WARN||s.chatQueue.length===CHAT_QUEUE_WARN*2)this.debug('CHAT_QUEUE_ALTA',{queued:s.chatQueue.length,peak:s.chatQueuePeak,received:s.chatReceived,delivered:s.chatDelivered});this.scheduleChatFlush()}
+  flushChats(){const s=this.state;if(s.chatFlushing)return;s.chatFlushing=true;try{let count=0;while(count<CHAT_BATCH_SIZE&&s.chatQueue.length){const item=s.chatQueue.shift();this.emitLive(item);s.chatDelivered++;count++}}finally{s.chatFlushing=false;if(s.chatQueue.length)this.scheduleChatFlush()}}
+  attach(live,generation){const active=()=>this.state.live===live&&this.state.generation===generation;onMany(live,[WebcastEvent?.CHAT,'chat','comment'],d=>{if(active())this.queueChat(d)});onMany(live,[WebcastEvent?.LIKE,'like'],d=>active()&&this.queueLike(d));onMany(live,[WebcastEvent?.FOLLOW,'follow'],d=>{if(active()){this.touch('follow');this.emitLive({type:'follow',user:fastUserOf(d),liveUser:this.state.username,connectorReceivedAt:Date.now()})}});onMany(live,[WebcastEvent?.SHARE,'share'],d=>{if(active()){this.touch('share');this.emitLive({type:'share',user:fastUserOf(d),liveUser:this.state.username,connectorReceivedAt:Date.now()})}});onMany(live,[WebcastEvent?.GIFT,'gift'],d=>{if(active()){this.touch('gift');this.emitLive({...normalizeGift(d),liveUser:this.state.username,connectorReceivedAt:Date.now()})}});live.on('disconnected',()=>{if(!active())return;this.state.live=null;this.state.connected=false;this.state.connecting=false;this.status({status:'disconnected',reason:'TikTok desconectou',unexpected:!this.state.manualStop});if(!this.state.manualStop&&this.state.hadConnected)this.scheduleRecovery('TikTok desconectou inesperadamente')});live.on('error',e=>active()&&this.debug('TIKTOK_ERROR',{detail:String(e?.message||e).slice(0,900)}))}
   async dispose({clearUser=false,bump=true}={}){if(bump)this.state.generation+=1;this.clearLikes();this.clearChats();const live=this.state.live;this.state.live=null;this.state.connected=false;this.state.connecting=false;if(clearUser)this.state.username='';if(live){try{live.removeAllListeners?.()}catch{}try{await live.disconnect?.()}catch{}}}
   async connect(raw,{recovery=false}={}){
     const username=cleanUsername(raw);if(!username){safeSend(this.ws,{type:'error',message:'Informe o @usuario da LIVE.'});return false}
-    const s=this.state;if(s.connecting)return false;if(s.connected&&s.live&&!recovery){this.status({status:'connected'});return true}
+    const s=this.state;if(s.connecting)return false;
+    if(s.connected&&s.live){s.wantedUsername=username;if(cleanUsername(s.username)===username){s.manualStop=false;s.hadConnected=true;s.recoveryAttempt=0;this.clearRecovery();this.status({status:'connected',preserved:true,recovery});return true}if(recovery)return false}
     if(!recovery){this.clearRecovery();s.manualStop=false;s.recoveryAttempt=0;s.hadConnected=false;s.wantedUsername=username;s.chatReceived=0;s.chatDelivered=0;s.chatDropped=0;s.chatQueuePeak=0;s.snifferCounts.clear();s.snifferSeen.clear();s.snifferLastReportAt=0}
-    await this.dispose({clearUser:false,bump:true});const generation=s.generation;
-    s.username=username;s.wantedUsername=username;s.connecting=true;s.connected=false;
-    this.status({status:'checking',recovery,attempt:s.recoveryAttempt,maxAttempts:MAX_RECOVERY_ATTEMPTS});
-    this.debug(recovery?'AUTO RECOVERY TENTANDO':'CONEXÃO MODERNA INICIADA',{username,attempt:s.recoveryAttempt,signerKey:Boolean(this.signApiKey)});
-    const live=this.makeLive(username);s.live=live;this.attach(live,generation);
-    try{
-      const info=await live.connect();if(s.generation!==generation||s.live!==live)return false;
-      s.connecting=false;s.connected=true;s.hadConnected=true;s.recoveryAttempt=0;s.lastEventAt=Date.now();s.lastSignal='connected';this.clearRecovery();
-      this.status({status:'connected',roomId:info?.roomId||null,recovered:recovery});this.debug(recovery?'LIVE RECUPERADA':'TIKTOK CONECTADA',{username,roomId:info?.roomId||null});return true;
-    }catch(rawError){
-      if(s.generation!==generation)return false;const error=normalizeModernConnectError(rawError),info=classifyTikTokError(error);await this.dispose({clearUser:false,bump:false});
-      this.debug(recovery?'AUTO RECOVERY FALHOU':'CONNECT_FAILED',{detail:info.message.slice(0,900),rateLimited:info.rateLimited,signingPaywall:info.signingPaywall});
-      if(recovery)this.scheduleRecovery(info.message,{rateLimited:info.rateLimited});else{safeSend(this.ws,{type:'error',message:info.message});this.status({status:'error',reason:info.message})}return false;
-    }
+    await this.dispose({clearUser:false,bump:true});const generation=s.generation;s.username=username;s.wantedUsername=username;s.connecting=true;s.connected=false;this.status({status:'checking',recovery,attempt:s.recoveryAttempt,maxAttempts:MAX_RECOVERY_ATTEMPTS});this.debug(recovery?'AUTO RECOVERY TENTANDO':'CONEXÃO MODERNA INICIADA',{username,attempt:s.recoveryAttempt,signerKey:Boolean(this.signApiKey)});const live=this.makeLive(username);s.live=live;this.attach(live,generation);
+    try{const info=await live.connect();if(s.generation!==generation||s.live!==live)return false;s.connecting=false;s.connected=true;s.hadConnected=true;s.recoveryAttempt=0;s.lastEventAt=Date.now();s.lastSignal='connected';this.clearRecovery();this.status({status:'connected',roomId:info?.roomId||null,recovered:recovery});this.debug(recovery?'LIVE RECUPERADA':'TIKTOK CONECTADA',{username,roomId:info?.roomId||null});return true}catch(rawError){if(s.generation!==generation)return false;const error=normalizeModernConnectError(rawError),info=classifyTikTokError(error);await this.dispose({clearUser:false,bump:false});this.debug(recovery?'AUTO RECOVERY FALHOU':'CONNECT_FAILED',{detail:info.message.slice(0,900),rateLimited:info.rateLimited,signingPaywall:info.signingPaywall});if(recovery)this.scheduleRecovery(info.message,{rateLimited:info.rateLimited});else{safeSend(this.ws,{type:'error',message:info.message});this.status({status:'error',reason:info.message})}return false}
   }
-  scheduleRecovery(reason='queda inesperada',{rateLimited=false}={}){
-    const s=this.state;if(s.manualStop||s.connected||s.connecting||s.recoveryTimer||!s.wantedUsername)return;
-    const attempt=(s.recoveryAttempt||0)+1;if(attempt>MAX_RECOVERY_ATTEMPTS){this.status({status:'disconnected',reason:'Auto Recovery esgotado. Reconecte manualmente.',recoveryExhausted:true,attempt:s.recoveryAttempt,maxAttempts:MAX_RECOVERY_ATTEMPTS});this.debug('AUTO RECOVERY ESGOTADO',{reason});return}
-    s.recoveryAttempt=attempt;const delay=reconnectDelayMs(attempt,{rateLimited});this.status({status:'reconnecting',attempt,maxAttempts:MAX_RECOVERY_ATTEMPTS,delay,reason});this.debug('AUTO RECOVERY AGENDADO',{attempt,maxAttempts:MAX_RECOVERY_ATTEMPTS,delay,reason});const epoch=s.generation;
-    s.recoveryTimer=setTimeout(async()=>{s.recoveryTimer=null;if(s.manualStop||s.connected||s.connecting||epoch!==s.generation)return;await this.connect(s.wantedUsername,{recovery:true})},delay);
-  }
-  async simulateUnexpectedDrop(){
-    const s=this.state;
-    if(!s.connected||!s.live||!s.wantedUsername){safeSend(this.ws,{type:'diagnostic_drop_result',ok:false,message:'Nenhuma sessão TikTok ativa para derrubar.'});return false}
-    const username=s.wantedUsername;s.manualStop=false;s.hadConnected=true;this.debug('DIAGNOSTIC_DROP_TIKTOK',{username});await this.dispose({clearUser:false,bump:true});s.username=username;s.wantedUsername=username;this.status({status:'disconnected',reason:'Queda simulada pelo diagnóstico',unexpected:true,diagnostic:true});safeSend(this.ws,{type:'diagnostic_drop_result',ok:true,username});this.scheduleRecovery('Queda simulada pelo diagnóstico');return true;
-  }
+  scheduleRecovery(reason='queda inesperada',{rateLimited=false}={}){const s=this.state;if(s.manualStop||s.connected||s.connecting||s.recoveryTimer||!s.wantedUsername)return;const attempt=(s.recoveryAttempt||0)+1;if(attempt>MAX_RECOVERY_ATTEMPTS){this.status({status:'disconnected',reason:'Auto Recovery esgotado. Reconecte manualmente.',recoveryExhausted:true,attempt:s.recoveryAttempt,maxAttempts:MAX_RECOVERY_ATTEMPTS});this.debug('AUTO RECOVERY ESGOTADO',{reason});return}s.recoveryAttempt=attempt;const delay=reconnectDelayMs(attempt,{rateLimited});this.status({status:'reconnecting',attempt,maxAttempts:MAX_RECOVERY_ATTEMPTS,delay,reason});this.debug('AUTO RECOVERY AGENDADO',{attempt,maxAttempts:MAX_RECOVERY_ATTEMPTS,delay,reason});const epoch=s.generation;s.recoveryTimer=setTimeout(async()=>{s.recoveryTimer=null;if(s.manualStop||s.connected||s.connecting||epoch!==s.generation)return;await this.connect(s.wantedUsername,{recovery:true})},delay)}
+  async simulateUnexpectedDrop(){const s=this.state;if(!s.connected||!s.live||!s.wantedUsername){safeSend(this.ws,{type:'diagnostic_drop_result',ok:false,message:'Nenhuma sessão TikTok ativa para derrubar.'});return false}const username=s.wantedUsername;s.manualStop=false;s.hadConnected=true;this.debug('DIAGNOSTIC_DROP_TIKTOK',{username});await this.dispose({clearUser:false,bump:true});s.username=username;s.wantedUsername=username;this.status({status:'disconnected',reason:'Queda simulada pelo diagnóstico',unexpected:true,diagnostic:true});safeSend(this.ws,{type:'diagnostic_drop_result',ok:true,username});this.scheduleRecovery('Queda simulada pelo diagnóstico');return true}
   async disconnect(){const s=this.state;s.manualStop=true;this.clearRecovery();s.recoveryAttempt=0;s.wantedUsername='';s.hadConnected=false;await this.dispose({clearUser:true,bump:true});this.status({status:'disconnected',manual:true})}
   ping(){const s=this.state;const events=[...s.snifferCounts.entries()].sort((a,b)=>b[1]-a[1]).slice(0,12).map(([event,count])=>({event,count}));return{type:'pong',at:Date.now(),mode:this.mode,username:s.username||s.wantedUsername,tiktokConnected:s.connected,reconnecting:Boolean(s.recoveryTimer),attempt:s.recoveryAttempt,maxAttempts:MAX_RECOVERY_ATTEMPTS,lastEventAt:s.lastEventAt,lastSignal:s.lastSignal,chat:{received:s.chatReceived,delivered:s.chatDelivered,dropped:s.chatDropped,queued:s.chatQueue.length,peak:s.chatQueuePeak},sniffer:{events}}}
 }
