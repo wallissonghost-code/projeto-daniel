@@ -14,7 +14,6 @@ const SIGN_API_KEY=String(process.env.SIGN_API_KEY||process.env.EULER_API_KEY||p
 const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const MIME={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.mjs':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json; charset=utf-8','.png':'image/png','.jpg':'image/jpeg','.webp':'image/webp','.svg':'image/svg+xml'};
 const runtimes=new Map();
-const CAPS=['cloudflare-automation-forward-v1','persistent-panel-independent-runtime-v1','runtime-health-v1','server-authoritative-automation-config-v1'];
 const cleanClientId=v=>String(v||'legacy').replace(/[^a-zA-Z0-9._:-]/g,'').slice(0,96)||'legacy';
 
 class PersistentRuntime{
@@ -28,12 +27,12 @@ class PersistentRuntime{
 function runtimeFor(id){const key=cleanClientId(id);let runtime=runtimes.get(key);if(!runtime){runtime=new PersistentRuntime(key);runtimes.set(key,runtime)}runtime.lastTouched=Date.now();return runtime}
 
 function serve(res,file){fs.readFile(file,(err,data)=>{if(err){res.writeHead(404,{'content-type':'text/plain; charset=utf-8'});return res.end('Not found')}res.writeHead(200,{'content-type':MIME[path.extname(file).toLowerCase()]||'application/octet-stream','cache-control':'no-store'});res.end(data)})}
-const server=http.createServer((req,res)=>{const pathname=decodeURIComponent((req.url||'/').split('?')[0]);if(pathname==='/health'){const runtimeList=[...runtimes.values()].map(r=>r.snapshot()),activeLives=runtimeList.filter(r=>r.tiktok.connected).length;res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});return res.end(JSON.stringify({ok:true,service:'projeto-daniel-live-connector',serverAutomation:'liveplus-server-automation-v4',clients:wss.clients.size,runtimes:runtimes.size,activeLives,relay:GameRelay.stats(),signerKey:Boolean(SIGN_API_KEY),capabilities:CAPS,runtimeDetails:runtimeList}))}if(pathname==='/'||pathname==='/painel'||pathname==='/painel.html')return serve(res,path.join(ROOT,'index.html'));const file=path.resolve(ROOT,pathname.replace(/^\/+/,''));if(!file.startsWith(ROOT)){res.writeHead(403);return res.end('Forbidden')}serve(res,file)});
+const server=http.createServer((req,res)=>{const pathname=decodeURIComponent((req.url||'/').split('?')[0]);if(pathname==='/health'){const runtimeList=[...runtimes.values()].map(r=>r.snapshot()),activeLives=runtimeList.filter(r=>r.tiktok.connected).length;res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});return res.end(JSON.stringify({ok:true,service:'projeto-daniel-live-connector',clients:wss.clients.size,runtimes:runtimes.size,activeLives,relay:GameRelay.stats(),signerKey:Boolean(SIGN_API_KEY),capabilities:['cloudflare-automation-forward-v1','persistent-panel-independent-runtime-v1','runtime-health-v1'],runtimeDetails:runtimeList}))}if(pathname==='/'||pathname==='/painel'||pathname==='/painel.html')return serve(res,path.join(ROOT,'index.html'));const file=path.resolve(ROOT,pathname.replace(/^\/+/,''));if(!file.startsWith(ROOT)){res.writeHead(403);return res.end('Forbidden')}serve(res,file)});
 const wss=new WebSocketServer({server});
 
 wss.on('connection',ws=>{
   let authenticated=!ACCESS_KEY,runtime=null,clientId='';
-  safeSend(ws,{type:'bridge',status:'ready',authRequired:Boolean(ACCESS_KEY),service:'projeto-daniel-live-connector',relay:'websocket-relay-v1',serverAutomation:'liveplus-server-automation-v4',capabilities:CAPS});
+  safeSend(ws,{type:'bridge',status:'ready',authRequired:Boolean(ACCESS_KEY),service:'projeto-daniel-live-connector',relay:'websocket-relay-v1',serverAutomation:'liveplus-server-automation-v3',capabilities:['cloudflare-automation-forward-v1','persistent-panel-independent-runtime-v1','runtime-health-v1']});
   ws.on('message',async raw=>{
     let m;try{m=JSON.parse(raw.toString())}catch{return}
     if(m.type==='auth'){
@@ -45,8 +44,8 @@ wss.on('connection',ws=>{
     if(!authenticated)return safeSend(ws,{type:'error',message:'Chave do conector inválida.'});
     if(!runtime){clientId=cleanClientId(m.clientId);runtime=runtimeFor(clientId).attach(ws)}else runtime.lastTouched=Date.now();
     const {automation,session}=runtime;
-    if(m.type==='server_automation_bind'){const ok=automation.configure(m);return safeSend(ws,{type:'server_automation_status',ok,provider:'cloudflare',code:automation.code,ready:automation.ready,game:automation.game,configured:automation.configured})}
-    if(m.type==='server_automation_sync'){automation.update(m);return safeSend(ws,{type:'server_automation_status',ok:true,provider:'cloudflare',code:automation.code,ready:automation.ready,game:automation.game,configured:automation.configured})}
+    if(m.type==='server_automation_bind'){const ok=automation.configure(m);return safeSend(ws,{type:'server_automation_status',ok,provider:'cloudflare',code:automation.code,ready:automation.ready,game:automation.game})}
+    if(m.type==='server_automation_sync'){automation.update(m);return safeSend(ws,{type:'server_automation_status',ok:true,provider:'cloudflare',code:automation.code,ready:automation.ready,game:automation.game})}
     if(GameRelay.handle(ws,m))return;
     if(m.type==='connect')return session.connect(m.username,{recovery:m.recovery===true});
     if(m.type==='disconnect')return session.disconnect();
