@@ -52,6 +52,15 @@ client.addEventListener('status',e=>{const m=e.detail;setLiveStatus(els,m);if(m.
 client.addEventListener('error',e=>notice(e.detail.message||'Erro no conector','error'));
 client.addEventListener('diagnostic_drop_result',e=>{const d=e.detail||{};diagnostics.log(d.ok?'QUEDA TIKTOK SIMULADA':'SIMULAÇÃO RECUSADA',d.message||'Auto Recovery deve assumir a sessão.',d.ok?'warn':'error');diagnostics.render();notice(d.ok?'Sessão TikTok derrubada de propósito. Acompanhe o Auto Recovery no diagnóstico.':d.message||'Não foi possível simular a queda.',d.ok?'ok':'error')});
 
+async function connectSavedConnector(){
+  const endpoint=els.endpoint.value.trim(),key=els.accessKey.value.trim();
+  if(!endpoint||!key.startsWith('NOT-')||client.connected||client.authenticated)return false;
+  const session=window.NOT_CONNECTOR_SESSION;if(!session?.getToken?.())return false;
+  notice('Assinatura validada. Reconectando Connector…');
+  try{await client.connect(endpoint,key);client.ping();notice('Conector reconectado automaticamente.','ok');redraw();return true}catch(error){notice(error?.message||'Não foi possível reconectar o Connector automaticamente.','error');redraw();return false}
+}
+window.addEventListener('not-connector-authorized',()=>{connectSavedConnector()});
+
 els.connectCloud.onclick=async()=>{persist();const endpoint=els.endpoint.value.trim();if(!endpoint){notice('Informe o WebSocket do seu conector. Ex.: wss://meu-app.onrender.com','error');els.endpoint.focus();return}els.connectCloud.disabled=true;els.connectCloud.textContent='CONECTANDO…';notice('Abrindo WebSocket e validando autenticação…');try{await client.connect(endpoint,els.accessKey.value);client.ping();notice('Conector autenticado e pronto.','ok')}catch(error){notice(error?.message||'Não foi possível conectar ao endpoint informado.','error')}finally{els.connectCloud.disabled=false;els.connectCloud.textContent='CONECTAR';redraw()}};
 els.disconnectCloud.onclick=()=>{if(client.connected&&client.authenticated)client.stopLive();finishLocalLiveSession();client.disconnect();notice('Conector desconectado.');redraw()};
 els.connectLive.onclick=()=>{persist();if(!requireConnector())return;const user=els.username.value.trim();if(!user){notice('Informe a conta @ da TikTok Live.','error');els.username.focus();return}startLocalLiveSession();engine.resetSession();if(!client.startLive(user))notice('Não foi possível enviar o comando de conexão da Live.','error');else notice(`Solicitando conexão com ${user.startsWith('@')?user:'@'+user}…`)};
@@ -70,3 +79,4 @@ els.testPanel.onclick=async()=>{const originalAutomation=engine.settings.automat
 
 setInterval(()=>{if(client.connected)client.ping();const started=engine.stats.startedAt;if(started)els.duration.textContent=formatElapsed(started);redraw()},1000);
 await loadMasterCatalog();resetRuleForm();gameBridge.render(els);redraw();
+await connectSavedConnector();
