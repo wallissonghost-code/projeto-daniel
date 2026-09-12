@@ -2,6 +2,7 @@ const LIVE_EVENT_TYPES=new Set(['like','chat','gift','follow','share']);
 const CLIENT_ID_KEY='liveplus-connector-client-id-v1';
 const LICENSE_DEVICE_KEY='not_device_id';
 const PA_VALIDATE_URL='https://pa.wallissonghost.workers.dev/api/licenses/validate';
+export const DEFAULT_CONNECTOR_ENDPOINT='wss://projeto-daniel-hjgg.onrender.com';
 const traceId=()=>`evt_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,8)}`;
 const makeDeviceId=()=>{const b=new Uint8Array(24);crypto.getRandomValues(b);return Array.from(b,x=>x.toString(16).padStart(2,'0')).join('')};
 const loadClientId=()=>{try{let id=localStorage.getItem(CLIENT_ID_KEY)||'';if(!id){id=`panel_${crypto.randomUUID?.()||`${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`}`;localStorage.setItem(CLIENT_ID_KEY,id)}return id}catch{return`panel_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`}};
@@ -33,9 +34,11 @@ export class ConnectorClient extends EventTarget{
     }
   }
   emit(type,detail){this.dispatchEvent(new CustomEvent(type,{detail}))}
-  validateEndpoint(endpoint){const value=String(endpoint||'').trim();if(!value)throw new Error('Informe o endereço WebSocket do conector.');let url;try{url=new URL(value)}catch{throw new Error('Endpoint inválido. Use ws:// ou wss://.')}if(!['ws:','wss:'].includes(url.protocol))throw new Error('O endpoint precisa começar com ws:// ou wss://.');if(location?.protocol==='https:'&&url.protocol==='ws:')throw new Error('Em uma página HTTPS use wss://, não ws://.');return url.toString()}
+  validateEndpoint(endpoint){const value=String(endpoint||DEFAULT_CONNECTOR_ENDPOINT).trim();let url;try{url=new URL(value)}catch{throw new Error('Endpoint inválido. Use ws:// ou wss://.')}if(!['ws:','wss:'].includes(url.protocol))throw new Error('O endpoint precisa começar com ws:// ou wss://.');if(location?.protocol==='https:'&&url.protocol==='ws:')throw new Error('Em uma página HTTPS use wss://, não ws://.');return url.toString()}
+  async browserSession(endpoint){const url=new URL(endpoint);url.protocol=url.protocol==='wss:'?'https:':'http:';url.pathname='/api/connector-session';url.search='';url.hash='';const response=await fetch(url.toString(),{method:'POST',cache:'no-store'});const data=await response.json().catch(()=>({}));if(!response.ok||data.ok!==true||!data.token)throw new Error('Não foi possível criar uma sessão temporária do Connector.');return String(data.token)}
   async connectorAuth(key){
     const value=String(key||'').trim();
+    if(!value){const browserSession=await this.browserSession(this.endpoint||DEFAULT_CONNECTOR_ENDPOINT);return{type:'auth',browserSession,clientId:this.clientId}}
     if(!value.startsWith('NOT-'))return{type:'auth',key:value,clientId:this.clientId};
     const gated=typeof window!=='undefined'?window.NOT_CONNECTOR_SESSION:null;
     const gatedToken=gated?.getToken?.();
@@ -46,7 +49,7 @@ export class ConnectorClient extends EventTarget{
     if(!response.ok||data.authorized!==true||!data.sessionToken)throw new Error(`Licença do Connector recusada${data.reason?`: ${data.reason}`:''}.`);
     return{type:'auth',licenseSession:data.sessionToken,deviceId:this.licenseDeviceId,clientId:this.clientId};
   }
-  connect(endpoint,key='',options={}){
+  connect(endpoint=DEFAULT_CONNECTOR_ENDPOINT,key='',options={}){
     const recovery=options?.recovery===true;if(!recovery){this.wantConnected=true;this.accessKey=String(key||'')}this.closeSocket({preserveIntent:true});
     let validated;try{validated=this.validateEndpoint(endpoint)}catch(error){return Promise.reject(error)}this.endpoint=validated;if(recovery&&key!==undefined)this.accessKey=String(key||this.accessKey||'');this.lastError='';
     try{if(typeof window!=='undefined'&&window.__livePlusCloudOwner===this)localStorage.setItem('liveplus-relay-endpoint',validated)}catch{}
@@ -55,7 +58,7 @@ export class ConnectorClient extends EventTarget{
       const fail=(message,error)=>{this.lastError=message;this.connected=false;this.authenticated=false;this.emit('cloud',{online:false,error:message,recovery});if(!settled){settled=true;clearTimeout(timer);reject(error||new Error(message))}};
       const timer=setTimeout(()=>fail(opened&&!authSeen?'O conector abriu, mas não respondeu à autenticação.':'Tempo limite ao conectar ao WebSocket.'),10000);
       let ws;try{ws=new WebSocket(validated)}catch(error){clearTimeout(timer);fail('Não foi possível abrir o WebSocket.',error);return}this.ws=ws;
-      ws.onopen=async()=>{if(this.ws!==ws)return;opened=true;this.connected=true;this.emit('cloud',{online:true,stage:'socket',recovery});try{const auth=await this.connectorAuth(this.accessKey||key||'');if(this.ws!==ws)return;ws.send(JSON.stringify(auth))}catch(error){fail(error?.message||'Falha ao validar licença do Connector.',error)}};
+      ws.onopen=async()=>{if(this.ws!==ws)return;opened=true;this.connected=true;this.emit('cloud',{online:true,stage:'socket',recovery});try{const auth=await this.connectorAuth(this.accessKey||key||'');if(this.ws!==ws)return;ws.send(JSON.stringify(auth))}catch(error){fail(error?.message||'Falha ao criar sessão do Connector.',error)}};
       ws.onerror=()=>{if(this.ws===ws)fail('Falha de rede/WebSocket. Confira endereço, HTTPS/WSS e servidor online.')};
       ws.onclose=event=>{if(this.ws!==ws)return;this.connected=false;this.authenticated=false;this.emit('cloud',{online:false,code:event.code,reason:event.reason||'',background:typeof document!=='undefined'&&document.visibilityState!=='visible'});if(typeof window!=='undefined'&&window.__livePlusCloudOwner===this)window.dispatchEvent(new CustomEvent('liveplus-cloud-state',{detail:{online:false}}));if(!settled)fail(`Conexão encerrada antes de autenticar${event.code?` (código ${event.code})`:''}.`)};
       ws.onmessage=ev=>{if(this.ws!==ws)return;let m;try{m=JSON.parse(ev.data)}catch{return}if(LIVE_EVENT_TYPES.has(m.type)){const receivedAt=Date.now();m.traceId=String(m.traceId||traceId());m.panelReceivedAt=Number(m.panelReceivedAt)||receivedAt;m.connectorSentAt=Number(m.connectorSentAt)||Number(m.at)||0}if(m.type==='auth'){authSeen=true;this.authenticated=!!m.ok;if(!m.ok){fail(m.reason?`Autenticação do Connector recusada: ${m.reason}.`:'Autenticação do Connector recusada.');return}clearTimeout(timer);if(!settled){settled=true;resolve(true)}this.emit('cloud',{online:true,authenticated:true,recovery,persistentRuntime:!!m.persistentRuntime,authMode:m.authMode||''})}if(m.type==='pong')this.lastPong=Date.now();if(typeof window!=='undefined'&&window.__livePlusCloudOwner===this){window.dispatchEvent(new CustomEvent('liveplus-cloud-message',{detail:m}));if(m.type==='auth'&&m.ok)window.dispatchEvent(new CustomEvent('liveplus-cloud-state',{detail:{online:true,authenticated:true,endpoint:this.endpoint,persistentRuntime:!!m.persistentRuntime}}))}this.emit('message',m);this.emit(m.type,m)};
