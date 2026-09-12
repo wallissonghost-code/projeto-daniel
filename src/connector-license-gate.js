@@ -1,4 +1,5 @@
 (()=>{'use strict';
+if(typeof window==='undefined'||typeof document==='undefined'||typeof localStorage==='undefined')return;
 const VALIDATE_URL='https://pa.wallissonghost.workers.dev/api/licenses/validate';
 const LICENSE_KEY='not_connector_license_key';
 const CLIENT_ID_KEY='liveplus-connector-client-id-v1';
