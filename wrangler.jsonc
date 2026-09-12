@@ -4,6 +4,10 @@
   "main": "cloudflare/game-relay-worker.js",
   "compatibility_date": "2026-08-30",
   "compatibility_flags": ["nodejs_compat"],
+  "keep_vars": true,
+  "vars": {
+    "REQUIRE_NOT_LICENSE_SESSION_GAME_IDS": "liveplus-test-game"
+  },
   "durable_objects": {
     "bindings": [
       {
