@@ -1,5 +1,6 @@
 const LIVE_EVENT_TYPES=new Set(['like','chat','gift','follow','share']);
 const CLIENT_ID_KEY='liveplus-connector-client-id-v1';
+const PA_VALIDATE_URL='https://pa.wallissonghost.workers.dev/api/licenses/validate';
 const traceId=()=>`evt_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,8)}`;
 const loadClientId=()=>{try{let id=localStorage.getItem(CLIENT_ID_KEY)||'';if(!id){id=`panel_${crypto.randomUUID?.()||`${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`}`;localStorage.setItem(CLIENT_ID_KEY,id)}return id}catch{return`panel_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`}};
 export class ConnectorClient extends EventTarget{
@@ -23,6 +24,14 @@ export class ConnectorClient extends EventTarget{
     if(location?.protocol==='https:'&&url.protocol==='ws:')throw new Error('Em uma página HTTPS use wss://, não ws://.');
     return url.toString();
   }
+  async connectorAuth(key){
+    const value=String(key||'').trim();
+    if(!value.startsWith('NOT-'))return{type:'auth',key:value,clientId:this.clientId};
+    const response=await fetch(PA_VALIDATE_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:value,deviceId:this.clientId,sessionPurpose:'connector'}),cache:'no-store'});
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok||data.authorized!==true||!data.sessionToken)throw new Error(`Licença do Connector recusada${data.reason?`: ${data.reason}`:''}.`);
+    return{type:'auth',licenseSession:data.sessionToken,deviceId:this.clientId,clientId:this.clientId};
+  }
   connect(endpoint,key='',options={}){
     const recovery=options?.recovery===true;
     if(!recovery){this.wantConnected=true;this.accessKey=String(key||'')}
@@ -33,54 +42,32 @@ export class ConnectorClient extends EventTarget{
     return new Promise((resolve,reject)=>{
       let settled=false,opened=false,authSeen=false;
       const fail=(message,error)=>{this.lastError=message;this.connected=false;this.authenticated=false;this.emit('cloud',{online:false,error:message,recovery});if(!settled){settled=true;clearTimeout(timer);reject(error||new Error(message))}};
-      const timer=setTimeout(()=>fail(opened&&!authSeen?'O conector abriu, mas não respondeu à autenticação.':'Tempo limite ao conectar ao WebSocket.'),7000);
+      const timer=setTimeout(()=>fail(opened&&!authSeen?'O conector abriu, mas não respondeu à autenticação.':'Tempo limite ao conectar ao WebSocket.'),10000);
       let ws;try{ws=new WebSocket(validated)}catch(error){clearTimeout(timer);return fail('Não foi possível abrir o WebSocket.',error)}
       this.ws=ws;
-      ws.onopen=()=>{if(this.ws!==ws)return;opened=true;this.connected=true;this.emit('cloud',{online:true,stage:'socket',recovery});try{ws.send(JSON.stringify({type:'auth',key:String(this.accessKey||key||''),clientId:this.clientId}))}catch(error){fail('Falha ao enviar autenticação.',error)}};
+      ws.onopen=async()=>{if(this.ws!==ws)return;opened=true;this.connected=true;this.emit('cloud',{online:true,stage:'socket',recovery});try{const auth=await this.connectorAuth(this.accessKey||key||'');if(this.ws!==ws)return;ws.send(JSON.stringify(auth))}catch(error){fail(error?.message||'Falha ao validar licença do Connector.',error)}};
       ws.onerror=()=>{if(this.ws===ws)fail('Falha de rede/WebSocket. Confira endereço, HTTPS/WSS e servidor online.')};
       ws.onclose=event=>{if(this.ws!==ws)return;this.connected=false;this.authenticated=false;this.emit('cloud',{online:false,code:event.code,reason:event.reason||'',background:typeof document!=='undefined'&&document.visibilityState!=='visible'});if(typeof window!=='undefined'&&window.__livePlusCloudOwner===this)window.dispatchEvent(new CustomEvent('liveplus-cloud-state',{detail:{online:false}}));if(!settled)fail(`Conexão encerrada antes de autenticar${event.code?` (código ${event.code})`:''}.`)};
       ws.onmessage=ev=>{
         if(this.ws!==ws)return;
         let m;try{m=JSON.parse(ev.data)}catch{return}
-        if(LIVE_EVENT_TYPES.has(m.type)){
-          const receivedAt=Date.now();m.traceId=String(m.traceId||traceId());m.panelReceivedAt=Number(m.panelReceivedAt)||receivedAt;m.connectorSentAt=Number(m.connectorSentAt)||Number(m.at)||0;
-        }
+        if(LIVE_EVENT_TYPES.has(m.type)){const receivedAt=Date.now();m.traceId=String(m.traceId||traceId());m.panelReceivedAt=Number(m.panelReceivedAt)||receivedAt;m.connectorSentAt=Number(m.connectorSentAt)||Number(m.at)||0}
         if(m.type==='auth'){
-          authSeen=true;this.authenticated=!!m.ok;if(!m.ok)return fail('Chave do conector recusada.');
-          clearTimeout(timer);if(!settled){settled=true;resolve(true)}this.emit('cloud',{online:true,authenticated:true,recovery,persistentRuntime:!!m.persistentRuntime});
+          authSeen=true;this.authenticated=!!m.ok;if(!m.ok)return fail(m.reason?`Autenticação do Connector recusada: ${m.reason}.`:'Autenticação do Connector recusada.');
+          clearTimeout(timer);if(!settled){settled=true;resolve(true)}this.emit('cloud',{online:true,authenticated:true,recovery,persistentRuntime:!!m.persistentRuntime,authMode:m.authMode||''});
         }
         if(m.type==='bridge'&&m.authRequired===false&&!authSeen){/* aguarda auth explícito para vincular runtime persistente */}
         if(m.type==='pong')this.lastPong=Date.now();
-        if(typeof window!=='undefined'&&window.__livePlusCloudOwner===this){
-          window.dispatchEvent(new CustomEvent('liveplus-cloud-message',{detail:m}));
-          if(m.type==='auth'&&m.ok)window.dispatchEvent(new CustomEvent('liveplus-cloud-state',{detail:{online:true,authenticated:true,endpoint:this.endpoint,persistentRuntime:!!m.persistentRuntime}}));
-        }
+        if(typeof window!=='undefined'&&window.__livePlusCloudOwner===this){window.dispatchEvent(new CustomEvent('liveplus-cloud-message',{detail:m}));if(m.type==='auth'&&m.ok)window.dispatchEvent(new CustomEvent('liveplus-cloud-state',{detail:{online:true,authenticated:true,endpoint:this.endpoint,persistentRuntime:!!m.persistentRuntime}}))}
         this.emit('message',m);this.emit(m.type,m);
       };
     })
   }
-  scheduleResumeRecovery(){
-    if(!this.isLifecycleOwner||!this.wantConnected||!this.endpoint)return;
-    clearTimeout(this.recoveryTimer);this.recoveryTimer=setTimeout(()=>this.recoverAfterResume(),220);
-  }
+  scheduleResumeRecovery(){if(!this.isLifecycleOwner||!this.wantConnected||!this.endpoint)return;clearTimeout(this.recoveryTimer);this.recoveryTimer=setTimeout(()=>this.recoverAfterResume(),220)}
   async recoverAfterResume(){
-    this.recoveryTimer=null;
-    if(this.recoveryInFlight||!this.wantConnected||!this.endpoint)return;
-    if(typeof document!=='undefined'&&document.visibilityState!=='visible')return;
-    if(this.connected&&this.authenticated){this.ping();return}
-    this.recoveryInFlight=true;const live=this.wantedLive;
-    this.emit('cloud',{online:false,recovering:true});
-    try{
-      let ok=false,lastError=null;
-      for(let attempt=1;attempt<=2&&this.wantConnected;attempt++){
-        try{await this.connect(this.endpoint,this.accessKey,{recovery:true});ok=true;break}catch(error){lastError=error;if(attempt<2)await new Promise(r=>setTimeout(r,650))}
-      }
-      if(!this.wantConnected)return;
-      if(!ok){this.emit('cloud',{online:false,error:lastError?.message||'Não foi possível recuperar o Connector.',recoveryFailed:true});return}
-      this.ping();
-      if(live&&this.wantedLive===live&&this.wantConnected){this.send({type:'connect',username:live,recovery:true});this.emit('cloud',{online:true,authenticated:true,recovered:true,liveRestored:true})}
-      else this.emit('cloud',{online:true,authenticated:true,recovered:true});
-    }finally{this.recoveryInFlight=false}
+    this.recoveryTimer=null;if(this.recoveryInFlight||!this.wantConnected||!this.endpoint)return;if(typeof document!=='undefined'&&document.visibilityState!=='visible')return;if(this.connected&&this.authenticated){this.ping();return}
+    this.recoveryInFlight=true;const live=this.wantedLive;this.emit('cloud',{online:false,recovering:true});
+    try{let ok=false,lastError=null;for(let attempt=1;attempt<=2&&this.wantConnected;attempt++){try{await this.connect(this.endpoint,this.accessKey,{recovery:true});ok=true;break}catch(error){lastError=error;if(attempt<2)await new Promise(r=>setTimeout(r,650))}}if(!this.wantConnected)return;if(!ok){this.emit('cloud',{online:false,error:lastError?.message||'Não foi possível recuperar o Connector.',recoveryFailed:true});return}this.ping();if(live&&this.wantedLive===live&&this.wantConnected){this.send({type:'connect',username:live,recovery:true});this.emit('cloud',{online:true,authenticated:true,recovered:true,liveRestored:true})}else this.emit('cloud',{online:true,authenticated:true,recovered:true})}finally{this.recoveryInFlight=false}
   }
   send(payload){if(this.ws?.readyState!==WebSocket.OPEN||!this.connected)return false;try{this.ws.send(JSON.stringify(payload));return true}catch{return false}}
   startLive(username){const u=String(username||'').trim().replace(/^@/,'');if(!u){this.emit('error',{message:'Informe a conta @ da Live.'});return false}this.wantedLive=u;return this.send({type:'connect',username:u})}
