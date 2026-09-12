@@ -1,6 +1,7 @@
 import '../license-device-manager.js';
 const PREFIX='daniel.live.plus.v2';
 const UNSCOPED='__unscoped__';
+const MANAGED_CONNECTOR_ENDPOINT='wss://projeto-daniel-hjgg.onrender.com';
 const keys={settings:`${PREFIX}.settings`,rules:`${PREFIX}.rules`,ruleProfiles:`${PREFIX}.rulesByGame`,ruleProfileMeta:`${PREFIX}.ruleProfileMeta`,activeGame:`${PREFIX}.activeGameId`};
 for(const legacy of [`${PREFIX}.catalog`,`${PREFIX}.discovered`]){try{localStorage.removeItem(legacy)}catch{}}
 function read(key,fallback){try{const v=JSON.parse(localStorage.getItem(key));return v??fallback}catch{return fallback}}
@@ -32,4 +33,6 @@ function migrateGiftReferences(catalog=[]){
   }
   if(changedProfiles)saveProfiles(all);return{changedRules,changedProfiles};
 }
-export const storage={settings:()=>read(keys.settings,{endpoint:'',key:'',username:'',capture:true,automation:false}),saveSettings:v=>write(keys.settings,v),activeGameId:()=>cleanGameId(read(keys.activeGame,'')),setActiveGameId:v=>write(keys.activeGame,cleanGameId(v)),profiles,rulesForGame,saveRulesForGame,migrateGiftReferences,profileInitialized:gameId=>!!profileMeta()[cleanGameId(gameId)]?.initialized,profileMeta:gameId=>profileMeta()[cleanGameId(gameId)]||null,markProfileInitialized:(gameId,patch={})=>setProfileMeta(gameId,{initialized:true,...patch}),rules:()=>rulesForGame(cleanGameId(read(keys.activeGame,''))),saveRules:v=>saveRulesForGame(cleanGameId(read(keys.activeGame,'')),v,{markInitialized:true,userModified:true,source:'user'})};
+function managedSettings(){const saved=read(keys.settings,{});return{...saved,endpoint:MANAGED_CONNECTOR_ENDPOINT,key:'',username:String(saved?.username||''),capture:saved?.capture!==false,automation:!!saved?.automation}}
+function saveManagedSettings(v={}){const current=managedSettings();return write(keys.settings,{...current,...v,endpoint:MANAGED_CONNECTOR_ENDPOINT,key:''})}
+export const storage={settings:managedSettings,saveSettings:saveManagedSettings,activeGameId:()=>cleanGameId(read(keys.activeGame,'')),setActiveGameId:v=>write(keys.activeGame,cleanGameId(v)),profiles,rulesForGame,saveRulesForGame,migrateGiftReferences,profileInitialized:gameId=>!!profileMeta()[cleanGameId(gameId)]?.initialized,profileMeta:gameId=>profileMeta()[cleanGameId(gameId)]||null,markProfileInitialized:(gameId,patch={})=>setProfileMeta(gameId,{initialized:true,...patch}),rules:()=>rulesForGame(cleanGameId(read(keys.activeGame,''))),saveRules:v=>saveRulesForGame(cleanGameId(read(keys.activeGame,'')),v,{markInitialized:true,userModified:true,source:'user'})};
