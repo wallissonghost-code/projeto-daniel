@@ -7,14 +7,17 @@ import {safeSend} from './protocol.mjs';
 import {TikTokSession} from './tiktok-session.mjs';
 import {GameRelay} from './game-relay.mjs';
 import {ServerAutomation} from './server-automation.mjs';
+import {verifyConnectorLicenseSession} from './license-session-auth.mjs';
 
 const PORT=Number(process.env.PORT||8787);
 const ACCESS_KEY=String(process.env.LIVE_CONNECTOR_KEY||process.env.CAOS_CONNECTOR_KEY||'').trim();
+const LICENSE_SESSION_SIGNING_KEY=String(process.env.LICENSE_SESSION_SIGNING_KEY||'').trim();
+const REQUIRE_CONNECTOR_LICENSE=['1','true','yes','on'].includes(String(process.env.REQUIRE_NOT_CONNECTOR_SESSION||'').trim().toLowerCase());
 const SIGN_API_KEY=String(process.env.SIGN_API_KEY||process.env.EULER_API_KEY||process.env.TIKTOK_SIGN_API_KEY||'').trim();
 const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const MIME={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.mjs':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json; charset=utf-8','.png':'image/png','.jpg':'image/jpeg','.webp':'image/webp','.svg':'image/svg+xml'};
 const runtimes=new Map();
-const CAPS=['cloudflare-automation-forward-v1','persistent-panel-independent-runtime-v1','runtime-health-v1','server-authoritative-automation-config-v1'];
+const CAPS=['cloudflare-automation-forward-v1','persistent-panel-independent-runtime-v1','runtime-health-v1','server-authoritative-automation-config-v1','pa-connector-session-v1'];
 const cleanClientId=v=>String(v||'legacy').replace(/[^a-zA-Z0-9._:-]/g,'').slice(0,96)||'legacy';
 
 class PersistentRuntime{
@@ -28,21 +31,25 @@ class PersistentRuntime{
 function runtimeFor(id){const key=cleanClientId(id);let runtime=runtimes.get(key);if(!runtime){runtime=new PersistentRuntime(key);runtimes.set(key,runtime)}runtime.lastTouched=Date.now();return runtime}
 
 function serve(res,file){fs.readFile(file,(err,data)=>{if(err){res.writeHead(404,{'content-type':'text/plain; charset=utf-8'});return res.end('Not found')}res.writeHead(200,{'content-type':MIME[path.extname(file).toLowerCase()]||'application/octet-stream','cache-control':'no-store'});res.end(data)})}
-const server=http.createServer((req,res)=>{const pathname=decodeURIComponent((req.url||'/').split('?')[0]);if(pathname==='/health'){const runtimeList=[...runtimes.values()].map(r=>r.snapshot()),activeLives=runtimeList.filter(r=>r.tiktok.connected).length;res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});return res.end(JSON.stringify({ok:true,service:'projeto-daniel-live-connector',serverAutomation:'liveplus-server-automation-v4',clients:wss.clients.size,runtimes:runtimes.size,activeLives,relay:GameRelay.stats(),signerKey:Boolean(SIGN_API_KEY),capabilities:CAPS,runtimeDetails:runtimeList}))}if(pathname==='/'||pathname==='/painel'||pathname==='/painel.html')return serve(res,path.join(ROOT,'index.html'));const file=path.resolve(ROOT,pathname.replace(/^\/+/,''));if(!file.startsWith(ROOT)){res.writeHead(403);return res.end('Forbidden')}serve(res,file)});
+const server=http.createServer((req,res)=>{const pathname=decodeURIComponent((req.url||'/').split('?')[0]);if(pathname==='/health'){const runtimeList=[...runtimes.values()].map(r=>r.snapshot()),activeLives=runtimeList.filter(r=>r.tiktok.connected).length;res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});return res.end(JSON.stringify({ok:true,service:'projeto-daniel-live-connector',serverAutomation:'liveplus-server-automation-v4',clients:wss.clients.size,runtimes:runtimes.size,activeLives,relay:GameRelay.stats(),signerKey:Boolean(SIGN_API_KEY),connectorLicenseRequired:REQUIRE_CONNECTOR_LICENSE,connectorLicenseVerifierReady:Boolean(LICENSE_SESSION_SIGNING_KEY),capabilities:CAPS,runtimeDetails:runtimeList}))}if(pathname==='/'||pathname==='/painel'||pathname==='/painel.html')return serve(res,path.join(ROOT,'index.html'));const file=path.resolve(ROOT,pathname.replace(/^\/+/,''));if(!file.startsWith(ROOT)){res.writeHead(403);return res.end('Forbidden')}serve(res,file)});
 const wss=new WebSocketServer({server});
 
 wss.on('connection',ws=>{
-  let authenticated=!ACCESS_KEY,runtime=null,clientId='';
-  safeSend(ws,{type:'bridge',status:'ready',authRequired:Boolean(ACCESS_KEY),service:'projeto-daniel-live-connector',relay:'websocket-relay-v1',serverAutomation:'liveplus-server-automation-v4',capabilities:CAPS});
+  let authenticated=!REQUIRE_CONNECTOR_LICENSE&&!ACCESS_KEY,runtime=null,clientId='';
+  safeSend(ws,{type:'bridge',status:'ready',authRequired:true,licenseSessionRequired:REQUIRE_CONNECTOR_LICENSE,service:'projeto-daniel-live-connector',relay:'websocket-relay-v1',serverAutomation:'liveplus-server-automation-v4',capabilities:CAPS});
   ws.on('message',async raw=>{
     let m;try{m=JSON.parse(raw.toString())}catch{return}
     if(m.type==='auth'){
-      authenticated=!ACCESS_KEY||String(m.key||'')===ACCESS_KEY;
+      let authMode='legacy-key',reason='invalid_credentials';
+      if(REQUIRE_CONNECTOR_LICENSE){
+        authMode='pa-session';
+        const verified=verifyConnectorLicenseSession(m.licenseSession,LICENSE_SESSION_SIGNING_KEY,{deviceId:String(m.deviceId||'')});
+        authenticated=verified.ok;reason=verified.reason||'';
+      }else authenticated=!ACCESS_KEY||String(m.key||'')===ACCESS_KEY;
       if(authenticated){clientId=cleanClientId(m.clientId);runtime=runtimeFor(clientId).attach(ws)}
-      return safeSend(ws,{type:'auth',ok:authenticated,clientId,persistentRuntime:authenticated})
+      return safeSend(ws,{type:'auth',ok:authenticated,clientId,persistentRuntime:authenticated,authMode,reason:authenticated?'':reason});
     }
-    if(['relay_game_join','relay_game_message','relay_leave'].includes(m.type)){if(GameRelay.handle(ws,m))return}
-    if(!authenticated)return safeSend(ws,{type:'error',message:'Chave do conector inválida.'});
+    if(!authenticated)return safeSend(ws,{type:'error',message:REQUIRE_CONNECTOR_LICENSE?'Sessão de licença do conector inválida ou ausente.':'Chave do conector inválida.'});
     if(!runtime){clientId=cleanClientId(m.clientId);runtime=runtimeFor(clientId).attach(ws)}else runtime.lastTouched=Date.now();
     const {automation,session}=runtime;
     if(m.type==='server_automation_bind'){const ok=automation.configure(m);return safeSend(ws,{type:'server_automation_status',ok,provider:'cloudflare',code:automation.code,ready:automation.ready,game:automation.game,configured:automation.configured})}
