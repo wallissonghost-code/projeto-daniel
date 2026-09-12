@@ -1,4 +1,5 @@
 import '../connector-license-gate.js';
+import '../license-device-manager.js';
 const PREFIX='daniel.live.plus.v2';
 const UNSCOPED='__unscoped__';
 const keys={settings:`${PREFIX}.settings`,rules:`${PREFIX}.rules`,ruleProfiles:`${PREFIX}.rulesByGame`,ruleProfileMeta:`${PREFIX}.ruleProfileMeta`,activeGame:`${PREFIX}.activeGameId`};
