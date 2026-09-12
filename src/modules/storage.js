@@ -1,4 +1,3 @@
-import '../connector-license-gate.js';
 import '../license-device-manager.js';
 const PREFIX='daniel.live.plus.v2';
 const UNSCOPED='__unscoped__';
