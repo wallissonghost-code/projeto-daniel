@@ -1,6 +1,7 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import {WebSocketServer} from 'ws';
 import {safeSend} from './protocol.mjs';
@@ -17,8 +18,14 @@ const SIGN_API_KEY=String(process.env.SIGN_API_KEY||process.env.EULER_API_KEY||p
 const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const MIME={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.mjs':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json; charset=utf-8','.png':'image/png','.jpg':'image/jpeg','.webp':'image/webp','.svg':'image/svg+xml'};
 const runtimes=new Map();
-const CAPS=['cloudflare-automation-forward-v1','persistent-panel-independent-runtime-v1','runtime-health-v1','server-authoritative-automation-config-v1','pa-connector-session-v1'];
+const browserSessions=new Map();
+const BROWSER_SESSION_TTL_MS=2*60*1000;
+const CAPS=['cloudflare-automation-forward-v1','persistent-panel-independent-runtime-v1','runtime-health-v1','server-authoritative-automation-config-v1','pa-connector-session-v1','browser-ephemeral-session-v1'];
 const cleanClientId=v=>String(v||'legacy').replace(/[^a-zA-Z0-9._:-]/g,'').slice(0,96)||'legacy';
+const b64url=v=>Buffer.from(v).toString('base64url');
+const signBrowserSession=payload=>crypto.createHmac('sha256',ACCESS_KEY).update(payload).digest('base64url');
+function issueBrowserSession(){if(!ACCESS_KEY)return null;const now=Date.now(),exp=now+BROWSER_SESSION_TTL_MS,nonce=crypto.randomBytes(18).toString('base64url'),payload=b64url(JSON.stringify({exp,nonce})),token=`${payload}.${signBrowserSession(payload)}`;browserSessions.set(nonce,exp);return{token,expiresAt:exp}}
+function verifyBrowserSession(token){if(!ACCESS_KEY||typeof token!=='string')return false;const [payload,sig]=token.split('.');if(!payload||!sig)return false;const expected=signBrowserSession(payload);try{if(!crypto.timingSafeEqual(Buffer.from(sig),Buffer.from(expected)))return false}catch{return false}let data;try{data=JSON.parse(Buffer.from(payload,'base64url').toString('utf8'))}catch{return false}const exp=Number(data?.exp)||0,nonce=String(data?.nonce||'');if(!nonce||exp<Date.now()||browserSessions.get(nonce)!==exp)return false;browserSessions.delete(nonce);return true}
 
 class PersistentRuntime{
   constructor(id){this.id=id;this.clientWs=null;this.lastTouched=Date.now();this.automation=new ServerAutomation(null);this.session=new TikTokSession(null,{signApiKey:SIGN_API_KEY,onEvent:event=>this.automation.onTikTok(event)})}
@@ -31,7 +38,7 @@ class PersistentRuntime{
 function runtimeFor(id){const key=cleanClientId(id);let runtime=runtimes.get(key);if(!runtime){runtime=new PersistentRuntime(key);runtimes.set(key,runtime)}runtime.lastTouched=Date.now();return runtime}
 
 function serve(res,file){fs.readFile(file,(err,data)=>{if(err){res.writeHead(404,{'content-type':'text/plain; charset=utf-8'});return res.end('Not found')}res.writeHead(200,{'content-type':MIME[path.extname(file).toLowerCase()]||'application/octet-stream','cache-control':'no-store'});res.end(data)})}
-const server=http.createServer((req,res)=>{const pathname=decodeURIComponent((req.url||'/').split('?')[0]);if(pathname==='/health'){const runtimeList=[...runtimes.values()].map(r=>r.snapshot()),activeLives=runtimeList.filter(r=>r.tiktok.connected).length;res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});return res.end(JSON.stringify({ok:true,service:'projeto-daniel-live-connector',serverAutomation:'liveplus-server-automation-v4',clients:wss.clients.size,runtimes:runtimes.size,activeLives,relay:GameRelay.stats(),signerKey:Boolean(SIGN_API_KEY),connectorLicenseRequired:REQUIRE_CONNECTOR_LICENSE,connectorLicenseVerifierReady:Boolean(LICENSE_SESSION_SIGNING_KEY),capabilities:CAPS,runtimeDetails:runtimeList}))}if(pathname==='/'||pathname==='/painel'||pathname==='/painel.html')return serve(res,path.join(ROOT,'index.html'));const file=path.resolve(ROOT,pathname.replace(/^\/+/,''));if(!file.startsWith(ROOT)){res.writeHead(403);return res.end('Forbidden')}serve(res,file)});
+const server=http.createServer((req,res)=>{const pathname=decodeURIComponent((req.url||'/').split('?')[0]);if(pathname==='/health'){const runtimeList=[...runtimes.values()].map(r=>r.snapshot()),activeLives=runtimeList.filter(r=>r.tiktok.connected).length;res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});return res.end(JSON.stringify({ok:true,service:'projeto-daniel-live-connector',serverAutomation:'liveplus-server-automation-v4',clients:wss.clients.size,runtimes:runtimes.size,activeLives,relay:GameRelay.stats(),signerKey:Boolean(SIGN_API_KEY),connectorLicenseRequired:REQUIRE_CONNECTOR_LICENSE,connectorLicenseVerifierReady:Boolean(LICENSE_SESSION_SIGNING_KEY),browserEphemeralSession:Boolean(ACCESS_KEY),capabilities:CAPS,runtimeDetails:runtimeList}))}if(pathname==='/api/connector-session'&&req.method==='POST'){const session=issueBrowserSession();res.writeHead(session?200:503,{'content-type':'application/json','cache-control':'no-store','access-control-allow-origin':'*'});return res.end(JSON.stringify(session?{ok:true,...session}:{ok:false,error:'connector_session_unavailable'}))}if(pathname==='/'||pathname==='/painel'||pathname==='/painel.html')return serve(res,path.join(ROOT,'index.html'));const file=path.resolve(ROOT,pathname.replace(/^\/+/,''));if(!file.startsWith(ROOT)){res.writeHead(403);return res.end('Forbidden')}serve(res,file)});
 const wss=new WebSocketServer({server});
 
 wss.on('connection',ws=>{
@@ -45,11 +52,12 @@ wss.on('connection',ws=>{
         authMode='pa-session';
         const verified=verifyConnectorLicenseSession(m.licenseSession,LICENSE_SESSION_SIGNING_KEY,{deviceId:String(m.deviceId||'')});
         authenticated=verified.ok;reason=verified.reason||'';
-      }else authenticated=!ACCESS_KEY||String(m.key||'')===ACCESS_KEY;
+      }else if(m.browserSession){authMode='browser-ephemeral';authenticated=verifyBrowserSession(String(m.browserSession||''));reason=authenticated?'':'invalid_or_expired_browser_session'}
+      else authenticated=!ACCESS_KEY||String(m.key||'')===ACCESS_KEY;
       if(authenticated){clientId=cleanClientId(m.clientId);runtime=runtimeFor(clientId).attach(ws)}
       return safeSend(ws,{type:'auth',ok:authenticated,clientId,persistentRuntime:authenticated,authMode,reason:authenticated?'':reason});
     }
-    if(!authenticated)return safeSend(ws,{type:'error',message:REQUIRE_CONNECTOR_LICENSE?'Sessão de licença do conector inválida ou ausente.':'Chave do conector inválida.'});
+    if(!authenticated)return safeSend(ws,{type:'error',message:REQUIRE_CONNECTOR_LICENSE?'Sessão de licença do conector inválida ou ausente.':'Sessão do conector inválida ou expirada.'});
     if(!runtime){clientId=cleanClientId(m.clientId);runtime=runtimeFor(clientId).attach(ws)}else runtime.lastTouched=Date.now();
     const {automation,session}=runtime;
     if(m.type==='server_automation_bind'){const ok=automation.configure(m);return safeSend(ws,{type:'server_automation_status',ok,provider:'cloudflare',code:automation.code,ready:automation.ready,game:automation.game,configured:automation.configured})}
@@ -64,6 +72,6 @@ wss.on('connection',ws=>{
   ws.on('close',()=>{GameRelay.detach(ws);runtime?.detach(ws)});
 });
 
-setInterval(()=>{const now=Date.now();for(const [id,runtime] of runtimes){if(runtime.clientWs||runtime.active()||now-runtime.lastTouched<60*60*1000)continue;runtime.close().catch(()=>{});runtimes.delete(id)}},30*60*1000).unref?.();
+setInterval(()=>{const now=Date.now();for(const [id,runtime] of runtimes){if(runtime.clientWs||runtime.active()||now-runtime.lastTouched<60*60*1000)continue;runtime.close().catch(()=>{});runtimes.delete(id)}for(const [nonce,exp] of browserSessions){if(exp<now)browserSessions.delete(nonce)}},30*60*1000).unref?.();
 
 server.listen(PORT,'0.0.0.0',()=>console.log(`Projeto Daniel Live Connector online :${PORT}`));
