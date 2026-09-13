@@ -44,6 +44,37 @@ export function deepNumber(obj,keys,depth=0,seen=new Set()){
   return null;
 }
 
+function firstHttpUrl(value){
+  if(typeof value==='string'&&/^https?:\/\//i.test(value)) return value;
+  if(Array.isArray(value)) return value.find(x=>typeof x==='string'&&/^https?:\/\//i.test(x))||'';
+  if(value&&typeof value==='object'){
+    for(const list of [value.urlList,value.url_list,value.urls]){
+      if(Array.isArray(list)){
+        const found=list.find(x=>typeof x==='string'&&/^https?:\/\//i.test(x));
+        if(found) return found;
+      }
+    }
+    for(const key of ['url','uri','src']){
+      const found=firstHttpUrl(value[key]);
+      if(found) return found;
+    }
+  }
+  return '';
+}
+
+export function avatarOf(data={}){
+  const roots=[data?.user,data?.userInfo,data?.author,data];
+  const keys=['profilePictureUrl','profile_picture_url','profilePicture','profile_picture','avatarUrl','avatar_url','avatarThumb','avatar_thumb','avatarMedium','avatar_medium','avatarLarger','avatar_larger','avatar','profileImage','profile_image'];
+  for(const root of roots){
+    if(!root||typeof root!=='object') continue;
+    for(const key of keys){
+      const found=firstHttpUrl(root[key]);
+      if(found) return found;
+    }
+  }
+  return '';
+}
+
 export function deepImageUrl(obj,depth=0,seen=new Set()){
   if(!obj||typeof obj!=='object'||depth>8||seen.has(obj)) return '';
   seen.add(obj);
@@ -102,6 +133,7 @@ export function normalizeGift(data={}){
   return {
     type:'gift',
     user:userOf(data),
+    avatar:avatarOf(data),
     gift:String(gift),
     giftId:giftId==null?null:String(giftId),
     count:Math.max(1,Number(data.repeatCount??data.repeat_count??data.count??1)||1),
