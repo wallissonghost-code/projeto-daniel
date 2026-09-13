@@ -38,12 +38,12 @@ export class ConnectorClient extends EventTarget{
   async browserSession(endpoint){const url=new URL(endpoint);url.protocol=url.protocol==='wss:'?'https:':'http:';url.pathname='/api/connector-session';url.search='';url.hash='';const response=await fetch(url.toString(),{method:'POST',cache:'no-store'});const data=await response.json().catch(()=>({}));if(!response.ok||data.ok!==true||!data.token)throw new Error('Não foi possível criar uma sessão temporária do Connector.');return String(data.token)}
   async connectorAuth(key){
     const value=String(key||'').trim();
-    if(!value){const browserSession=await this.browserSession(this.endpoint||DEFAULT_CONNECTOR_ENDPOINT);return{type:'auth',browserSession,clientId:this.clientId}}
-    if(!value.startsWith('NOT-'))return{type:'auth',key:value,clientId:this.clientId};
     const gated=typeof window!=='undefined'?window.NOT_CONNECTOR_SESSION:null;
     const gatedToken=gated?.getToken?.();
     const gatedDevice=String(gated?.getDeviceId?.()||'');
     if(gatedToken&&gatedDevice){return{type:'auth',licenseSession:gatedToken,deviceId:gatedDevice,clientId:this.clientId};}
+    if(!value){const browserSession=await this.browserSession(this.endpoint||DEFAULT_CONNECTOR_ENDPOINT);return{type:'auth',browserSession,clientId:this.clientId}}
+    if(!value.startsWith('NOT-'))return{type:'auth',key:value,clientId:this.clientId};
     const response=await fetch(PA_VALIDATE_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:value,deviceId:this.licenseDeviceId,sessionPurpose:'connector',activationMode:'revalidate'}),cache:'no-store'});
     const data=await response.json().catch(()=>({}));
     if(!response.ok||data.authorized!==true||!data.sessionToken)throw new Error(`Licença do Connector recusada${data.reason?`: ${data.reason}`:''}.`);
