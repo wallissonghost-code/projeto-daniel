@@ -1,6 +1,8 @@
 import '../license-device-manager.js';
 const PREFIX='daniel.live.plus.v2';
 const UNSCOPED='__unscoped__';
+const MANAGED_CONNECTOR_ENDPOINT='wss://projeto-daniel-hjgg.onrender.com';
+const MANAGED_SESSION_MARKER='NOT-SESSION';
 const keys={settings:`${PREFIX}.settings`,rules:`${PREFIX}.rules`,ruleProfiles:`${PREFIX}.rulesByGame`,ruleProfileMeta:`${PREFIX}.ruleProfileMeta`,activeGame:`${PREFIX}.activeGameId`};
 for(const legacy of [`${PREFIX}.catalog`,`${PREFIX}.discovered`]){try{localStorage.removeItem(legacy)}catch{}}
 function read(key,fallback){try{const v=JSON.parse(localStorage.getItem(key));return v??fallback}catch{return fallback}}
@@ -32,6 +34,6 @@ function migrateGiftReferences(catalog=[]){
   }
   if(changedProfiles)saveProfiles(all);return{changedRules,changedProfiles};
 }
-function sessionSettings(){const saved=read(keys.settings,{});return{...saved,endpoint:'',key:'',username:String(saved?.username||''),capture:saved?.capture!==false,automation:!!saved?.automation}}
+function sessionSettings(){const saved=read(keys.settings,{});return{...saved,endpoint:MANAGED_CONNECTOR_ENDPOINT,key:MANAGED_SESSION_MARKER,username:String(saved?.username||''),capture:saved?.capture!==false,automation:!!saved?.automation}}
 function saveSessionSettings(v={}){const current=read(keys.settings,{});const {endpoint,key,...safe}=v;return write(keys.settings,{...current,...safe,endpoint:'',key:''})}
 export const storage={settings:sessionSettings,saveSettings:saveSessionSettings,activeGameId:()=>cleanGameId(read(keys.activeGame,'')),setActiveGameId:v=>write(keys.activeGame,cleanGameId(v)),profiles,rulesForGame,saveRulesForGame,migrateGiftReferences,profileInitialized:gameId=>!!profileMeta()[cleanGameId(gameId)]?.initialized,profileMeta:gameId=>profileMeta()[cleanGameId(gameId)]||null,markProfileInitialized:(gameId,patch={})=>setProfileMeta(gameId,{initialized:true,...patch}),rules:()=>rulesForGame(cleanGameId(read(keys.activeGame,''))),saveRules:v=>saveRulesForGame(cleanGameId(read(keys.activeGame,'')),v,{markInitialized:true,userModified:true,source:'user'})};
