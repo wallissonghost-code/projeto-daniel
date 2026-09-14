@@ -8,7 +8,7 @@ import {safeSend} from './protocol.mjs';
 import {TikTokSession} from './tiktok-session.mjs';
 import {GameRelay} from './game-relay.mjs';
 import {ServerAutomation} from './server-automation.mjs';
-import {verifyConnectorLicenseSession} from './license-session-auth.mjs';
+import {verifyConnectorLicenseSession,verifyGameLicenseSession} from './license-session-auth.mjs';
 
 const PORT=Number(process.env.PORT||8787);
 const ACCESS_KEY=String(process.env.LIVE_CONNECTOR_KEY||process.env.CAOS_CONNECTOR_KEY||'').trim();
@@ -42,10 +42,20 @@ const server=http.createServer((req,res)=>{const pathname=decodeURIComponent((re
 const wss=new WebSocketServer({server});
 
 wss.on('connection',ws=>{
-  let authenticated=!REQUIRE_CONNECTOR_LICENSE&&!ACCESS_KEY,runtime=null,clientId='';
+  let authenticated=!REQUIRE_CONNECTOR_LICENSE&&!ACCESS_KEY,runtime=null,clientId='',gameAuthenticated=false;
   safeSend(ws,{type:'bridge',status:'ready',authRequired:true,licenseSessionRequired:REQUIRE_CONNECTOR_LICENSE,service:'projeto-daniel-live-connector',relay:'websocket-relay-v1',serverAutomation:'liveplus-server-automation-v4',capabilities:CAPS});
   ws.on('message',async raw=>{
     let m;try{m=JSON.parse(raw.toString())}catch{return}
+    if(m.type==='relay_game_join'){
+      const verified=verifyGameLicenseSession(m.licenseSession,LICENSE_SESSION_SIGNING_KEY,{deviceId:String(m.deviceId||'')});
+      if(!verified.ok)return safeSend(ws,{type:'relay_error',scope:'game_join',message:verified.reason||'Sessão de jogo inválida.'});
+      gameAuthenticated=true;
+      return GameRelay.handle(ws,m);
+    }
+    if(gameAuthenticated){
+      if(m.type==='relay_game_message'||m.type==='relay_leave')return GameRelay.handle(ws,m);
+      return safeSend(ws,{type:'relay_error',scope:'game_protocol',message:'Mensagem não permitida para sessão de jogo.'});
+    }
     if(m.type==='auth'){
       let authMode='legacy-key',reason='invalid_credentials';
       if(REQUIRE_CONNECTOR_LICENSE){
