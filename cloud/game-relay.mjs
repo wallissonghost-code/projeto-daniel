@@ -2,11 +2,12 @@ import {safeSend} from './protocol.mjs';
 
 const DEFAULT_TTL_MS=5*60*1000;
 const DEFAULT_GRACE_MS=30*1000;
-const CODE_RE=/^[A-HJ-NP-Z2-9]{4}-?[A-HJ-NP-Z2-9]{4}$/i;
+const CODE_RE=/^[A-HJ-NP-Z2-9]{8}$/i;
 const sessions=new Map();
 
-const cleanCode=value=>String(value||'').trim().toUpperCase();
-const validCode=code=>CODE_RE.test(code);
+const cleanCode=value=>String(value||'').trim().toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,8);
+const formatCode=value=>{const code=cleanCode(value);return code.length===8?`${code.slice(0,4)}-${code.slice(4)}`:code};
+const validCode=code=>CODE_RE.test(cleanCode(code));
 const alive=ws=>ws&&ws.readyState===1;
 const now=()=>Date.now();
 
@@ -14,7 +15,8 @@ function getSession(code){
   const key=cleanCode(code);return sessions.get(key)||null;
 }
 function newSession(code){
-  return{code:cleanCode(code),createdAt:now(),panel:null,game:null,gameId:'',manifest:null,lastState:null,lastGameSeen:0,panelSeen:0,expiresAt:now()+DEFAULT_TTL_MS};
+  const key=cleanCode(code);
+  return{code:formatCode(key),key,createdAt:now(),panel:null,game:null,gameId:'',manifest:null,lastState:null,lastGameSeen:0,panelSeen:0,expiresAt:now()+DEFAULT_TTL_MS};
 }
 function replayCached(session){
   if(!alive(session?.panel))return;
@@ -81,8 +83,8 @@ function detach(ws,onlyCode=''){
   const wanted=cleanCode(onlyCode);
   for(const [code,s] of sessions){
     if(wanted&&code!==wanted)continue;
-    if(s.game===ws){s.game=null;s.lastGameSeen=now();relay(s.panel,{type:'relay_game_disconnected',code});}
-    if(s.panel===ws){s.panel=null;s.panelSeen=now();relay(s.game,{type:'relay_panel_disconnected',code});}
+    if(s.game===ws){s.game=null;s.lastGameSeen=now();relay(s.panel,{type:'relay_game_disconnected',code:s.code});}
+    if(s.panel===ws){s.panel=null;s.panelSeen=now();relay(s.game,{type:'relay_panel_disconnected',code:s.code});}
   }
 }
 function sweep(){
