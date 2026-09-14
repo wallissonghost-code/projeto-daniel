@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 const sha=value=>crypto.createHash('sha256').update(String(value)).digest('hex');
 const decode=value=>{try{return JSON.parse(Buffer.from(String(value),'base64url').toString('utf8'))}catch{return null}};
 
-export function verifyConnectorLicenseSession(token,secret,{deviceId='',now=Date.now()}={}){
+function verifyLicenseSession(token,secret,{deviceId='',audience='',now=Date.now()}={}){
   const raw=String(token||'').trim();
   if(!raw||!secret)return{ok:false,reason:'missing_credentials'};
   const parts=raw.split('.');
@@ -17,8 +17,16 @@ export function verifyConnectorLicenseSession(token,secret,{deviceId='',now=Date
   if(!payload||payload.v!==1||!payload.lid||!payload.dev)return{ok:false,reason:'invalid_payload'};
   const expiresAt=Number(payload.exp||0)*1000;
   if(!expiresAt||expiresAt<=now)return{ok:false,reason:'expired'};
-  if(String(payload.aud||'game')!=='connector')return{ok:false,reason:'audience_mismatch'};
+  if(audience&&String(payload.aud||'game')!==audience)return{ok:false,reason:'audience_mismatch'};
   if(!deviceId)return{ok:false,reason:'missing_device_id'};
   if(String(payload.dev)!==sha(deviceId))return{ok:false,reason:'device_mismatch'};
   return{ok:true,payload,expiresAt};
+}
+
+export function verifyConnectorLicenseSession(token,secret,options={}){
+  return verifyLicenseSession(token,secret,{...options,audience:'connector'});
+}
+
+export function verifyGameLicenseSession(token,secret,options={}){
+  return verifyLicenseSession(token,secret,{...options,audience:'game'});
 }
