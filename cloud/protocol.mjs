@@ -1,9 +1,11 @@
 const LIVE_EVENT_TYPES=new Set(['like','chat','gift','follow','share']);
 export function safeSend(ws,payload){
-  if(ws?.readyState===ws?.OPEN){
+  if(!ws||typeof ws.send!=='function'||ws.readyState!==1)return false;
+  try{
     const outgoing=payload&&typeof payload==='object'&&LIVE_EVENT_TYPES.has(payload.type)&&!payload.connectorSentAt?{...payload,connectorSentAt:Date.now()}:payload;
     ws.send(JSON.stringify(outgoing));
-  }
+    return true;
+  }catch{return false}
 }
 
 export function cleanUsername(value=''){
