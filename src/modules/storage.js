@@ -1,5 +1,6 @@
 const PREFIX='daniel.live.plus.v2';
 const UNSCOPED='__unscoped__';
+export const MANAGED_CONNECTOR_ENDPOINT='wss://projeto-daniel-hjgg.onrender.com';
 const keys={settings:`${PREFIX}.settings`,rules:`${PREFIX}.rules`,ruleProfiles:`${PREFIX}.rulesByGame`,ruleProfileMeta:`${PREFIX}.ruleProfileMeta`,activeGame:`${PREFIX}.activeGameId`};
 for(const legacy of [`${PREFIX}.catalog`,`${PREFIX}.discovered`]){try{localStorage.removeItem(legacy)}catch{}}
 function read(key,fallback){try{const v=JSON.parse(localStorage.getItem(key));return v??fallback}catch{return fallback}}
@@ -46,8 +47,8 @@ function migrateGiftReferences(catalog=[]){
   return{changedRules,changedProfiles};
 }
 export const storage={
-  settings:()=>read(keys.settings,{endpoint:'',key:'',username:'',capture:true,automation:false}),
-  saveSettings:v=>write(keys.settings,v),
+  settings:()=>({...read(keys.settings,{key:'',username:'',capture:true,automation:false}),endpoint:MANAGED_CONNECTOR_ENDPOINT}),
+  saveSettings:v=>{const current=read(keys.settings,{});const next={...current,...v};delete next.endpoint;return write(keys.settings,next)},
   activeGameId:()=>cleanGameId(read(keys.activeGame,'')),
   setActiveGameId:v=>write(keys.activeGame,cleanGameId(v)),
   profiles,
