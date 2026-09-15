@@ -1,3 +1,4 @@
+import '../access-license-gate.js';
 const LIVE_EVENT_TYPES=new Set(['like','chat','gift','follow','share']);
 const CLIENT_ID_KEY='liveplus-connector-client-id-v1';
 const traceId=()=>`evt_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,8)}`;
