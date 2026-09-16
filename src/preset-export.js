@@ -98,8 +98,9 @@ async function restoreOfficialPreset(){
 }
 function ensureRestoreButton(){
   if(restoreButton())return restoreButton();const exportBtn=button();if(!exportBtn)return null;
-  const b=document.createElement('button');b.id='restoreOfficialPreset';b.type='button';b.className='badge';b.textContent='↺';b.title='Restaurar regras oficiais do jogo';b.setAttribute('aria-label','Restaurar regras oficiais do jogo');
-  b.style.marginRight='8px';b.style.minWidth='40px';b.style.fontSize='18px';b.style.cursor='pointer';exportBtn.parentElement?.insertBefore(b,exportBtn);return b;
+  const b=document.createElement('button');b.id='restoreOfficialPreset';b.type='button';b.textContent='↺';b.title='Restaurar regras oficiais do jogo';b.setAttribute('aria-label','Restaurar regras oficiais do jogo');
+  Object.assign(b.style,{marginRight:'8px',padding:'4px',width:'32px',height:'32px',minWidth:'32px',minHeight:'32px',border:'0',outline:'0',boxShadow:'none',background:'transparent',borderRadius:'0',fontSize:'22px',lineHeight:'1',fontWeight:'700',color:'inherit',cursor:'pointer',display:'inline-flex',alignItems:'center',justifyContent:'center',verticalAlign:'middle',appearance:'none',WebkitAppearance:'none'});
+  exportBtn.parentElement?.insertBefore(b,exportBtn);return b;
 }
 function bind(){const b=button();if(b&&b.dataset.presetExportBound!=='1'){b.dataset.presetExportBound='1';b.addEventListener('click',exportPreset)}const restore=ensureRestoreButton();if(restore&&restore.dataset.presetRestoreBound!=='1'){restore.dataset.presetRestoreBound='1';restore.addEventListener('click',restoreOfficialPreset)}}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',bind,{once:true});else bind();
