@@ -52,6 +52,7 @@
       const data=await response.json().catch(()=>({}));
       if(!response.ok||data.authorized!==true)throw new Error(data.reason||data.status||'LICENSE_DENIED');
       localStorage.setItem(STORAGE_KEY,key);
+      document.documentElement.classList.add('not-initial-license-authorized');
       document.documentElement.classList.remove('not-initial-license-locked');
       gate.remove();
       window.dispatchEvent(new CustomEvent('not-initial-license-authorized',{detail:{authorized:true,plan:data.plan,expiresAt:data.expiresAt}}));
@@ -69,6 +70,7 @@
     if(saved){showSplash();validate(saved,true)}else showLogin();
   }
 
+  document.documentElement.classList.remove('not-initial-license-authorized');
   document.documentElement.classList.add('not-initial-license-locked');
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mount,{once:true});else mount();
 })();
