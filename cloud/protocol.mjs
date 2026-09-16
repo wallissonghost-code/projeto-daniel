@@ -43,6 +43,26 @@ export function deepNumber(obj,keys,depth=0,seen=new Set()){
   return null;
 }
 
+function firstHttpUrl(value,depth=0,seen=new Set()){
+  if(!value||depth>6)return '';
+  if(typeof value==='string')return /^https?:\/\//i.test(value.trim())?value.trim():'';
+  if(Array.isArray(value)){for(const item of value){const found=firstHttpUrl(item,depth+1,seen);if(found)return found}return''}
+  if(typeof value!=='object'||seen.has(value))return'';
+  seen.add(value);
+  for(const key of ['urlList','url_list','urls','url','uri']){const found=firstHttpUrl(value[key],depth+1,seen);if(found)return found}
+  return'';
+}
+
+export function userAvatarOf(data={}){
+  const users=[data?.user,data?.userInfo,data?.user_info,data?.author,data?.sender,data];
+  const keys=['profilePictureUrl','profile_picture_url','avatarUrl','avatar_url','avatarThumb','avatar_thumb','avatarMedium','avatar_medium','avatarLarger','avatar_larger','avatar','profilePicture','profile_picture'];
+  for(const user of users){
+    if(!user||typeof user!=='object')continue;
+    for(const key of keys){const found=firstHttpUrl(user[key]);if(found)return found}
+  }
+  return'';
+}
+
 export function deepImageUrl(obj,depth=0,seen=new Set()){
   if(!obj||typeof obj!=='object'||depth>8||seen.has(obj)) return '';
   seen.add(obj);
@@ -98,9 +118,13 @@ export function normalizeGift(data={}){
   const giftId=rawGiftId===''?null:rawGiftId;
   const gift=data.giftName||data.extendedGiftInfo?.name||data.gift?.name||deepValue(data,['giftName','gift_name'])||`gift-${giftId??'unknown'}`;
   const diamondRaw=data.diamondCount??data.diamond_count??data.extendedGiftInfo?.diamondCount??data.extendedGiftInfo?.diamond_count??deepNumber(data,['diamondCount','diamond_count','diamondCost','diamond_cost','cost']);
+  const avatar=userAvatarOf(data);
   return {
     type:'gift',
     user:userOf(data),
+    avatar,
+    avatarUrl:avatar,
+    profilePictureUrl:avatar,
     gift:String(gift),
     giftId:giftId==null?null:String(giftId),
     count:Math.max(1,Number(data.repeatCount??data.repeat_count??data.count??1)||1),
