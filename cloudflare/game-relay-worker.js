@@ -2,7 +2,7 @@ import { DurableObject } from 'cloudflare:workers';
 import { verifyNotLicenseSession } from './license-session-auth.js';
 
 const PROTOCOL='websocket-relay-v1';
-const VERSION='cloudflare-relay-v8';
+const VERSION='cloudflare-relay-v9';
 const AUTOMATION_PROTOCOL='liveplus-cloud-automation-v1';
 const CODE_RE=/^[A-Z0-9]{4}-?[A-Z0-9]{4}$/;
 const DEFAULT_TTL=5*60*1000;
@@ -59,7 +59,7 @@ export class LivePlusRelayRoom extends DurableObject {
       const previous=await this.roomState();
       const expiresAt=previous?.consumed?Math.max(Number(previous.expiresAt||0),Date.now()+ACTIVE_TTL):Date.now()+ttl;
       const room=await this.saveRoom({code:a.code,createdAt:previous?.createdAt||Date.now(),expiresAt,consumed:!!previous?.consumed,gameId:previous?.gameId||'',active:true,provisional:false});
-      this.closeOthers('panel',ws);this.setRole(ws,'panel',{authenticated:true});
+      this.closeOthers('panel',ws);this.setRole(ws,'panel',{authenticated:true,pairId:a.code});
       json(ws,{type:'relay_panel_ready',code:a.code,gameConnected:!!this.game(),ingressConnected:!!this.ingress(),relay:PROTOCOL,automation:AUTOMATION_PROTOCOL,resumed:!!previous});
       const game=this.game();if(game)json(game,{type:'relay_game_ready',code:a.code,panelConnected:true,relay:PROTOCOL,resumed:true});
       if(room.manifest)json(ws,{type:'relay_message',from:'game',code:a.code,payload:room.manifest});
@@ -80,9 +80,9 @@ export class LivePlusRelayRoom extends DurableObject {
       if(!room||!room.active||Number(room.expiresAt||0)<=Date.now()){
         room=await this.saveRoom({code:a.code,createdAt:Date.now(),expiresAt:Date.now()+DEFAULT_TTL,consumed:true,gameId,active:true,provisional:true,manifest:null,lastState:null});
       }
-      this.closeOthers('game',ws);this.setRole(ws,'game',requireLicense?{licenseVerified:true,licenseExpiresAt:license.expiresAt,deviceId}:{licenseVerified:false});
+      this.closeOthers('game',ws);this.setRole(ws,'game',requireLicense?{licenseVerified:true,licenseExpiresAt:license.expiresAt,deviceId,gameId,pairId:a.code}:{licenseVerified:false,gameId,pairId:a.code});
       room=await this.saveRoom({consumed:true,gameId:gameId||room.gameId||'',expiresAt:Date.now()+ACTIVE_TTL,active:true});
-      const panel=this.panel();json(ws,{type:'relay_game_ready',code:a.code,panelConnected:!!panel,relay:PROTOCOL,resumed:!panel,licenseVerified:requireLicense});if(panel)json(panel,{type:'relay_game_connected',code:a.code,gameId:room.gameId||''});this.notifyRole('ingress',{type:'relay_game_connected',code:a.code});return;
+      const panel=this.panel();json(ws,{type:'relay_game_ready',code:a.code,panelConnected:!!panel,gameId:room.gameId||gameId,pairId:a.code,pairState:panel?'paired':'game-solo',relay:PROTOCOL,resumed:!panel,licenseVerified:requireLicense});if(panel)json(panel,{type:'relay_game_connected',code:a.code,gameId:room.gameId||'',pairId:a.code,pairState:'paired'});this.notifyRole('ingress',{type:'relay_game_connected',code:a.code});return;
     }
     if(m.type==='relay_ingress_join'){
       const ok=!this.env.GAME_RELAY_KEY||a.authenticated;if(!ok)return json(ws,{type:'relay_error',scope:'auth',message:'Ingress não autenticado.'});const room=await this.roomState();if(!room||!room.active||Number(room.expiresAt||0)<=Date.now())return json(ws,{type:'relay_error',scope:'ingress_join',message:'Sessão não encontrada ou expirada.'});this.closeOthers('ingress',ws);this.setRole(ws,'ingress',{authenticated:true});json(ws,{type:'relay_ingress_ready',code:a.code,gameConnected:!!this.game(),automation:AUTOMATION_PROTOCOL});const panel=this.panel();if(panel)json(panel,{type:'relay_ingress_connected',code:a.code});return;
@@ -104,7 +104,7 @@ export class LivePlusRelayRoom extends DurableObject {
       const panel=this.panel();if(panel)json(panel,{type:'relay_message',from:'game',code:a.code,payload});return;
     }
     if(m.type==='relay_status'){
-      const room=await this.roomState(),cfg=await this.automationState();return json(ws,{type:'relay_status',code:a.code,roomActive:!!room&&Number(room.expiresAt||0)>Date.now(),consumed:!!room?.consumed,panelConnected:!!this.panel(),gameConnected:!!this.game(),ingressConnected:!!this.ingress(),automationEnabled:!!cfg.enabled,expiresAt:Number(room?.expiresAt||0),relay:PROTOCOL,automation:AUTOMATION_PROTOCOL});
+      const room=await this.roomState(),cfg=await this.automationState();return json(ws,{type:'relay_status',code:a.code,pairId:a.code,pairState:this.panel()&&this.game()?'paired':this.game()?'game-solo':this.panel()?'panel-solo':'inactive',roomActive:!!room&&Number(room.expiresAt||0)>Date.now(),consumed:!!room?.consumed,panelConnected:!!this.panel(),gameConnected:!!this.game(),ingressConnected:!!this.ingress(),automationEnabled:!!cfg.enabled,expiresAt:Number(room?.expiresAt||0),relay:PROTOCOL,automation:AUTOMATION_PROTOCOL});
     }
     if(m.type==='relay_leave'){try{ws.close(1000,'leave')}catch{};return}
     if(m.type==='ping')return json(ws,{type:'pong',at:Date.now(),service:'liveplus-game-relay',version:VERSION,automation:AUTOMATION_PROTOCOL});
