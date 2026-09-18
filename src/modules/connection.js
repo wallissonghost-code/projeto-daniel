@@ -6,7 +6,7 @@ const loadClientId=()=>{try{let id=localStorage.getItem(CLIENT_ID_KEY)||'';if(!i
 export class ConnectorClient extends EventTarget{
   constructor(){
     super();this.ws=null;this.endpoint='';this.accessKey='';this.clientId=loadClientId();this.connected=false;this.authenticated=false;this.lastPong=0;this.lastError='';
-    this.wantConnected=false;this.wantedLive='';this.recoveryInFlight=false;this.recoveryTimer=null;this.isLifecycleOwner=false;
+    this.wantConnected=false;this.wantedLive='';this.recoveryInFlight=false;this.recoveryTimer=null;this.isLifecycleOwner=false;this.pairId='';this.gameId='';this.presenceTimer=null;
     if(typeof window!=='undefined'&&!window.__livePlusCloudOwner){
       window.__livePlusCloudOwner=this;this.isLifecycleOwner=true;
       window.addEventListener('liveplus-cloud-send',e=>{const payload=e?.detail;if(payload&&typeof payload==='object')this.send(payload)});
@@ -16,6 +16,9 @@ export class ConnectorClient extends EventTarget{
     }
   }
   emit(type,detail){this.dispatchEvent(new CustomEvent(type,{detail}))}
+  reportPresence(connected=this.authenticated){return window.NOT_CONNECTOR_SESSION?.reportPresence?.({role:'panel',gameId:this.gameId,pairId:this.pairId,connected})}
+  startPresenceHeartbeat(){clearInterval(this.presenceTimer);this.reportPresence(true);this.presenceTimer=setInterval(()=>{if(this.authenticated)this.reportPresence(true)},30000)}
+  stopPresenceHeartbeat(){clearInterval(this.presenceTimer);this.presenceTimer=null;this.reportPresence(false)}
   validateEndpoint(endpoint){const value=String(endpoint||'').trim();if(!value)throw new Error('Informe o endereço WebSocket do conector.');let url;try{url=new URL(value)}catch{throw new Error('Endpoint inválido. Use ws:// ou wss://.')}if(!['ws:','wss:'].includes(url.protocol))throw new Error('O endpoint precisa começar com ws:// ou wss://.');if(location?.protocol==='https:'&&url.protocol==='ws:')throw new Error('Em uma página HTTPS use wss://, não ws://.');return url.toString()}
   connect(endpoint,key='',options={}){
     const recovery=options?.recovery===true;if(!recovery){this.wantConnected=true;this.accessKey=String(key||'')}this.closeSocket({preserveIntent:true});
@@ -26,8 +29,8 @@ export class ConnectorClient extends EventTarget{
       ws.onerror=()=>{if(this.ws===ws)fail('Falha de rede/WebSocket. Confira endereço, HTTPS/WSS e servidor online.')};
       ws.onclose=event=>{if(this.ws!==ws)return;this.connected=false;this.authenticated=false;if(this.isLifecycleOwner)window.NOT_CONNECTOR_SESSION?.releaseUsage?.();this.emit('cloud',{online:false,code:event.code,reason:event.reason||'',background:typeof document!=='undefined'&&document.visibilityState!=='visible'});if(typeof window!=='undefined'&&window.__livePlusCloudOwner===this)window.dispatchEvent(new CustomEvent('liveplus-cloud-state',{detail:{online:false}}));if(!settled)fail(`Conexão encerrada antes de autenticar${event.code?` (código ${event.code})`:''}.`)};
       ws.onmessage=async ev=>{if(this.ws!==ws)return;let m;try{m=JSON.parse(ev.data)}catch{return}if(LIVE_EVENT_TYPES.has(m.type)){const receivedAt=Date.now();m.traceId=String(m.traceId||traceId());m.panelReceivedAt=Number(m.panelReceivedAt)||receivedAt;m.connectorSentAt=Number(m.connectorSentAt)||Number(m.at)||0;}
-        if(m.type==='auth'){authSeen=true;if(!m.ok){this.authenticated=false;return fail('Chave do conector recusada.')}const usage=await window.NOT_CONNECTOR_SESSION?.claimUsage?.();if(!usage?.ok){this.authenticated=false;const message=usage?.reason==='CONCURRENT_LIMIT_REACHED'?`Limite de uso simultâneo atingido (${usage.activeSessions}/${usage.concurrentLimit}).`:'Não foi possível reservar uma vaga de uso da assinatura.';try{ws.close(4009,'usage lease denied')}catch{}return fail(message)}this.authenticated=true;window.NOT_CONNECTOR_SESSION?.startUsageHeartbeat?.();clearTimeout(timer);if(!settled){settled=true;resolve(true)}this.emit('cloud',{online:true,authenticated:true,recovery,persistentRuntime:!!m.persistentRuntime,usageActive:true,activeSessions:usage.activeSessions,concurrentLimit:usage.concurrentLimit});}
-        if(m.type==='bridge'&&m.authRequired===false&&!authSeen){}if(m.type==='pong')this.lastPong=Date.now();if(typeof window!=='undefined'&&window.__livePlusCloudOwner===this){window.dispatchEvent(new CustomEvent('liveplus-cloud-message',{detail:m}));if(m.type==='auth'&&m.ok&&this.authenticated)window.dispatchEvent(new CustomEvent('liveplus-cloud-state',{detail:{online:true,authenticated:true,endpoint:this.endpoint,persistentRuntime:!!m.persistentRuntime,usageActive:true}}));}this.emit('message',m);this.emit(m.type,m);
+        if(m.type==='auth'){authSeen=true;if(!m.ok){this.authenticated=false;return fail('Chave do conector recusada.')}const usage=await window.NOT_CONNECTOR_SESSION?.claimUsage?.();if(!usage?.ok){this.authenticated=false;const message=usage?.reason==='CONCURRENT_LIMIT_REACHED'?`Limite de uso simultâneo atingido (${usage.activeSessions}/${usage.concurrentLimit}).`:'Não foi possível reservar uma vaga de uso da assinatura.';try{ws.close(4009,'usage lease denied')}catch{}return fail(message)}this.authenticated=true;window.NOT_CONNECTOR_SESSION?.startUsageHeartbeat?.();this.startPresenceHeartbeat();clearTimeout(timer);if(!settled){settled=true;resolve(true)}this.emit('cloud',{online:true,authenticated:true,recovery,persistentRuntime:!!m.persistentRuntime,usageActive:true,activeSessions:usage.activeSessions,concurrentLimit:usage.concurrentLimit});}
+        if(m.type==='relay_game_connected'){this.pairId=String(m.pairId||m.code||'');this.gameId=String(m.gameId||'');this.reportPresence(true)}if(m.type==='relay_game_disconnected'){this.gameId='';this.pairId='';this.reportPresence(true)}if(m.type==='bridge'&&m.authRequired===false&&!authSeen){}if(m.type==='pong')this.lastPong=Date.now();if(typeof window!=='undefined'&&window.__livePlusCloudOwner===this){window.dispatchEvent(new CustomEvent('liveplus-cloud-message',{detail:m}));if(m.type==='auth'&&m.ok&&this.authenticated)window.dispatchEvent(new CustomEvent('liveplus-cloud-state',{detail:{online:true,authenticated:true,endpoint:this.endpoint,persistentRuntime:!!m.persistentRuntime,usageActive:true}}));}this.emit('message',m);this.emit(m.type,m);
       };
     })
   }
@@ -39,6 +42,6 @@ export class ConnectorClient extends EventTarget{
   simulateTikTokDrop(){return this.send({type:'diagnostic_simulate_tiktok_drop',diagnostic:true})}
   ping(){return this.send({type:'ping'})}
   emitAction(action,payload,id=crypto.randomUUID?.()||String(Date.now())){return this.send({type:'emit_action',id,action,payload})}
-  closeSocket({preserveIntent=false}={}){const ws=this.ws;this.ws=null;try{ws?.close()}catch{}this.connected=false;this.authenticated=false;this.lastError='';if(!preserveIntent&&this.isLifecycleOwner)window.NOT_CONNECTOR_SESSION?.releaseUsage?.();if(!preserveIntent){this.wantConnected=false;this.wantedLive='';clearTimeout(this.recoveryTimer);this.recoveryTimer=null}}
+  closeSocket({preserveIntent=false}={}){if(!preserveIntent)this.stopPresenceHeartbeat();const ws=this.ws;this.ws=null;try{ws?.close()}catch{}this.connected=false;this.authenticated=false;this.lastError='';if(!preserveIntent&&this.isLifecycleOwner)window.NOT_CONNECTOR_SESSION?.releaseUsage?.();if(!preserveIntent){this.wantConnected=false;this.wantedLive='';clearTimeout(this.recoveryTimer);this.recoveryTimer=null}}
   disconnect(){this.closeSocket({preserveIntent:false})}
 }
