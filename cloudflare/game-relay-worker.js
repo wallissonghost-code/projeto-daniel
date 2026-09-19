@@ -2,7 +2,8 @@ import { DurableObject } from 'cloudflare:workers';
 import { verifyNotLicenseSession } from './license-session-auth.js';
 
 const PROTOCOL='websocket-relay-v1';
-const VERSION='cloudflare-relay-v9';
+const VERSION='cloudflare-relay-v10';
+const ROBLOX_PROTOCOL='not-roblox-bridge-v1';
 const AUTOMATION_PROTOCOL='liveplus-cloud-automation-v1';
 const CODE_RE=/^[A-Z0-9]{4}-?[A-Z0-9]{4}$/;
 const DEFAULT_TTL=5*60*1000;
@@ -20,9 +21,22 @@ export class LivePlusRelayRoom extends DurableObject {
   constructor(ctx,env){super(ctx,env);this.ctx=ctx;this.env=env;this.cooldowns=new Map();this.likeProgress=new Map();this.seenEvents=new Map()}
   async roomState(){return await this.ctx.storage.get('session')||null}
   async automationState(){return await this.ctx.storage.get('automation')||{enabled:false,rules:[],catalog:[],actions:[],updatedAt:0}}
+  async robloxState(){return await this.ctx.storage.get('roblox')||{cursor:0,commands:[],lastSeenAt:0,gameId:''}}
+  async saveRoblox(patch={}){const current=await this.robloxState();const next={...current,...patch};await this.ctx.storage.put('roblox',next);return next}
+  async queueRobloxCommand(command){const state=await this.robloxState(),cursor=Number(state.cursor||0)+1,commands=[...(Array.isArray(state.commands)?state.commands:[]),{cursor,command,at:Date.now()}].slice(-100);await this.saveRoblox({cursor,commands});return cursor}
+  robloxLive(state){return Number(state?.lastSeenAt||0)>Date.now()-45000}
   async saveRoom(patch={}){const current=await this.roomState()||{};const next={...current,...patch,updatedAt:Date.now()};await this.ctx.storage.put('session',next);if(next.expiresAt)await this.ctx.storage.setAlarm(next.expiresAt);return next}
   async saveAutomation(payload={}){const actions=(Array.isArray(payload.actions)?payload.actions:[]).map(a=>({id:String(a?.id||''),params:a?.params&&typeof a.params==='object'?a.params:{}})).filter(a=>a.id);const next={enabled:payload.automationEnabled===true,rules:Array.isArray(payload.rules)?payload.rules:[],catalog:Array.isArray(payload.catalog)?payload.catalog:[],actions,updatedAt:Date.now()};await this.ctx.storage.put('automation',next);return next}
   async fetch(request){
+    const url=new URL(request.url);
+    if(url.pathname.startsWith('/roblox/internal/')){
+      if(String(request.headers.get('x-not-roblox-auth')||'')!==String(this.env.GAME_RELAY_KEY||''))return Response.json({ok:false,reason:'unauthorized'},{status:401});
+      let body={};try{body=await request.json()}catch{return Response.json({ok:false,reason:'invalid_json'},{status:400})}
+      const room=await this.roomState();if(!room||!room.active||Number(room.expiresAt||0)<=Date.now())return Response.json({ok:false,reason:'session_not_found'},{status:404});
+      if(url.pathname.endsWith('/leave')){await this.saveRoblox({lastSeenAt:0,serverId:'',gameId:''});return Response.json({ok:true,protocol:ROBLOX_PROTOCOL})}
+      const current=await this.robloxState(),serverId=String(body.serverId||'');if(current.serverId&&current.serverId!==serverId&&this.robloxLive(current))return Response.json({ok:false,reason:'session_occupied'},{status:409});
+      const cursor=Math.max(0,Number(body.cursor||0)),commands=(Array.isArray(current.commands)?current.commands:[]).filter(x=>Number(x.cursor)>cursor);await this.saveRoblox({lastSeenAt:Date.now(),serverId,gameId:String(body.gameId||room.gameId||''),transport:'roblox-http'});return Response.json({ok:true,protocol:ROBLOX_PROTOCOL,code:body.code,transport:'roblox-http',cursor:Number(current.cursor||0),commands,panelConnected:!!this.panel()});
+    }
     if(request.headers.get('Upgrade')!=='websocket')return new Response('WebSocket required',{status:426});
     const url=new URL(request.url),code=cleanCode(url.searchParams.get('code'));
     if(!CODE_RE.test(code))return new Response('Invalid session code',{status:400});
@@ -45,7 +59,7 @@ export class LivePlusRelayRoom extends DurableObject {
   canFire(rule){const id=String(rule.id||rule.actionId||''),now=Date.now(),until=this.cooldowns.get(id)||0;if(now<until)return false;this.cooldowns.set(id,now+Math.max(0,Number(rule.cooldown)||0)*1000);return true}
   resolveAction(rule,cfg){if(String(rule.actionId||'')!=='__random__')return{id:String(rule.actionId||''),params:rule.actionParams&&typeof rule.actionParams==='object'?rule.actionParams:{}};const actions=Array.isArray(cfg.actions)?cfg.actions.filter(a=>a?.id&&a.id!=='__random__'):[];if(!actions.length)return null;const selected=actions[Math.floor(Math.random()*actions.length)];return{id:String(selected.id),params:selected.params&&typeof selected.params==='object'?selected.params:{}}}
   pruneSeen(now){for(const [id,at] of this.seenEvents)if(now-at>60000)this.seenEvents.delete(id)}
-  async routeTikTokEvent(ws,m){const event=m.event&&typeof m.event==='object'?m.event:null;if(!event)return json(ws,{type:'automation_event_ack',ok:false,reason:'invalid_event'});const now=Date.now(),eventId=String(m.eventId||event.eventId||''),receivedAt=Number(m.receivedAt||event.receivedAt||now);this.pruneSeen(now);if(eventId&&this.seenEvents.has(eventId))return json(ws,{type:'automation_event_ack',ok:true,eventId,sent:0,deduplicated:true});if(eventId)this.seenEvents.set(eventId,now);if(now-receivedAt>EVENT_MAX_AGE)return json(ws,{type:'automation_event_ack',ok:true,eventId,sent:0,stale:true});if(event.type==='gift'&&Number(event.giftType)===1&&event.repeatEnd===false)return json(ws,{type:'automation_event_ack',ok:true,eventId,sent:0,pendingGift:true});const cfg=await this.automationState(),game=this.game();if(!cfg.enabled||!game)return json(ws,{type:'automation_event_ack',ok:true,eventId,sent:0,enabled:cfg.enabled,gameConnected:!!game});let sent=0;for(const rule of cfg.rules){if(!rule?.actionId||!this.matchRule(rule,event,cfg.catalog)||!this.canFire(rule))continue;if(rule.trigger==='like'){const id=String(rule.id||rule.actionId||'like'),target=Math.max(1,Number(rule.quantity)||1);this.likeProgress.set(id,Math.max(0,(this.likeProgress.get(id)||0)-target))}const selected=this.resolveAction(rule,cfg);if(!selected?.id)continue;const command={type:'command',protocol:'liveplus-command-v1',gameId:String(rule.gameId||''),action:selected.id,params:selected.params,ruleId:rule.id||'',event:{...event,randomAction:String(rule.actionId||'')==='__random__'?selected.id:undefined},eventId,at:now};json(game,{type:'relay_message',from:'panel',code:ws.deserializeAttachment()?.code,payload:command});sent++}json(ws,{type:'automation_event_ack',ok:true,eventId,sent,gameConnected:!!game});const panel=this.panel();if(panel)json(panel,{type:'automation_event_result',eventId,sent,at:now});return true}
+  async routeTikTokEvent(ws,m){const event=m.event&&typeof m.event==='object'?m.event:null;if(!event)return json(ws,{type:'automation_event_ack',ok:false,reason:'invalid_event'});const now=Date.now(),eventId=String(m.eventId||event.eventId||''),receivedAt=Number(m.receivedAt||event.receivedAt||now);this.pruneSeen(now);if(eventId&&this.seenEvents.has(eventId))return json(ws,{type:'automation_event_ack',ok:true,eventId,sent:0,deduplicated:true});if(eventId)this.seenEvents.set(eventId,now);if(now-receivedAt>EVENT_MAX_AGE)return json(ws,{type:'automation_event_ack',ok:true,eventId,sent:0,stale:true});if(event.type==='gift'&&Number(event.giftType)===1&&event.repeatEnd===false)return json(ws,{type:'automation_event_ack',ok:true,eventId,sent:0,pendingGift:true});const cfg=await this.automationState(),game=this.game(),roblox=await this.robloxState(),robloxConnected=this.robloxLive(roblox);if(!cfg.enabled||(!game&&!robloxConnected))return json(ws,{type:'automation_event_ack',ok:true,eventId,sent:0,enabled:cfg.enabled,gameConnected:!!game,robloxConnected});let sent=0;for(const rule of cfg.rules){if(!rule?.actionId||!this.matchRule(rule,event,cfg.catalog)||!this.canFire(rule))continue;if(rule.trigger==='like'){const id=String(rule.id||rule.actionId||'like'),target=Math.max(1,Number(rule.quantity)||1);this.likeProgress.set(id,Math.max(0,(this.likeProgress.get(id)||0)-target))}const selected=this.resolveAction(rule,cfg);if(!selected?.id)continue;const command={type:'command',protocol:'liveplus-command-v1',gameId:String(rule.gameId||''),action:selected.id,params:selected.params,ruleId:rule.id||'',event:{...event,randomAction:String(rule.actionId||'')==='__random__'?selected.id:undefined},eventId,at:now};if(game){json(game,{type:'relay_message',from:'panel',code:ws.deserializeAttachment()?.code,payload:command});sent++}else if(robloxConnected){await this.queueRobloxCommand(command);sent++}}json(ws,{type:'automation_event_ack',ok:true,eventId,sent,gameConnected:!!game,robloxConnected});const panel=this.panel();if(panel)json(panel,{type:'automation_event_result',eventId,sent,at:now});return true}
   async webSocketMessage(ws,raw){
     const m=parse(raw);if(!m||typeof m!=='object')return;
     const a=ws.deserializeAttachment()||{role:'pending',authenticated:false};
@@ -127,7 +141,16 @@ export class LivePlusRelayRoom extends DurableObject {
 export default {
   async fetch(request,env){
     const url=new URL(request.url);
-    if(url.pathname==='/'||url.pathname==='/health')return Response.json({ok:true,service:'liveplus-game-relay',version:VERSION,relay:PROTOCOL,automation:AUTOMATION_PROTOCOL,authRequired:!!env.GAME_RELAY_KEY,licenseSessionRequired:enabled(env.REQUIRE_NOT_LICENSE_SESSION),selectiveLicenseSessionRequired:protectedGameIds(env.REQUIRE_NOT_LICENSE_SESSION_GAME_IDS).size>0,protectedGameCount:protectedGameIds(env.REQUIRE_NOT_LICENSE_SESSION_GAME_IDS).size,provider:'cloudflare'});
+    if(url.pathname==='/'||url.pathname==='/health')return Response.json({ok:true,service:'liveplus-game-relay',version:VERSION,relay:PROTOCOL,automation:AUTOMATION_PROTOCOL,roblox:ROBLOX_PROTOCOL,authRequired:!!env.GAME_RELAY_KEY,licenseSessionRequired:enabled(env.REQUIRE_NOT_LICENSE_SESSION),selectiveLicenseSessionRequired:protectedGameIds(env.REQUIRE_NOT_LICENSE_SESSION_GAME_IDS).size>0,protectedGameCount:protectedGameIds(env.REQUIRE_NOT_LICENSE_SESSION_GAME_IDS).size,provider:'cloudflare'});
+    if(url.pathname==='/roblox/poll'||url.pathname==='/roblox/leave'){
+      if(request.method!=='POST')return new Response('Method not allowed',{status:405});
+      let body={};try{body=await request.json()}catch{return Response.json({ok:false,reason:'invalid_json'},{status:400})}
+      const code=cleanCode(body.code);if(!CODE_RE.test(code))return Response.json({ok:false,reason:'invalid_session_code'},{status:400});
+      const gameId=String(body.gameId||'').trim(),deviceId=String(body.serverId||'').trim(),license=await verifyNotLicenseSession(body.licenseSession,env.LICENSE_SESSION_SIGNING_KEY,{deviceId});
+      if(!license.ok)return Response.json({ok:false,reason:license.reason},{status:401});
+      const id=env.LIVEPLUS_RELAY.idFromName(code.replace('-','')),stub=env.LIVEPLUS_RELAY.get(id);
+      return stub.fetch(new Request(new URL(`/roblox/internal${url.pathname.endsWith('leave')?'/leave':'/poll'}`,request.url),{method:'POST',headers:{'content-type':'application/json','x-not-roblox-auth':String(env.GAME_RELAY_KEY||'')},body:JSON.stringify({code,gameId,serverId:deviceId,cursor:Number(body.cursor||0)})}));
+    }
     if(url.pathname!=='/relay')return new Response('Not found',{status:404});
     if(request.headers.get('Upgrade')!=='websocket')return new Response('WebSocket required',{status:426});
     const code=cleanCode(url.searchParams.get('code'));if(!CODE_RE.test(code))return new Response('Invalid session code',{status:400});
