@@ -49,8 +49,11 @@ export class LivePlusRelayRoom extends DurableObject {
         return Response.json({ok:true,protocol:ROBLOX_PROTOCOL,connected:false});
       }
       const cursor=Math.max(0,Number(body.cursor||0)),commands=(Array.isArray(current.commands)?current.commands:[]).filter(x=>Number(x.cursor)>cursor);
-      await this.saveRoblox({lastSeenAt:Date.now(),serverId,gameId:String(body.gameId||room.gameId||''),credential:activeCredential,transport:'roblox-http'});
-      return Response.json({ok:true,authorized:true,connected:true,protocol:ROBLOX_PROTOCOL,roomCode:body.code,transport:'roblox-http',credential:activeCredential,cursor:Number(current.cursor||0),commands,panelConnected:!!this.panel()});
+      const robloxGameId=String(body.gameId||room.gameId||'roblox');
+      await this.saveRoblox({lastSeenAt:Date.now(),serverId,gameId:robloxGameId,credential:activeCredential,transport:'roblox-http'});
+      const panel=this.panel();
+      if(panel)json(panel,{type:'relay_game_connected',code:body.code,gameId:robloxGameId,pairId:body.code,pairState:'paired',transport:'roblox-http',platform:'roblox'});
+      return Response.json({ok:true,authorized:true,connected:true,protocol:ROBLOX_PROTOCOL,roomCode:body.code,gameId:robloxGameId,pairId:body.code,pairState:panel?'paired':'game-solo',transport:'roblox-http',credential:activeCredential,cursor:Number(current.cursor||0),commands,panelConnected:!!panel});
     }
     if(request.headers.get('Upgrade')!=='websocket')return new Response('WebSocket required',{status:426});
     const code=cleanCode(url.searchParams.get('code'));
@@ -133,7 +136,7 @@ export class LivePlusRelayRoom extends DurableObject {
       const panel=this.panel();if(panel)json(panel,{type:'relay_message',from:'game',code:a.code,payload});return;
     }
     if(m.type==='relay_status'){
-      const room=await this.roomState(),cfg=await this.automationState();return json(ws,{type:'relay_status',code:a.code,pairId:a.code,pairState:this.panel()&&this.game()?'paired':this.game()?'game-solo':this.panel()?'panel-solo':'inactive',roomActive:!!room&&Number(room.expiresAt||0)>Date.now(),consumed:!!room?.consumed,panelConnected:!!this.panel(),gameConnected:!!this.game(),ingressConnected:!!this.ingress(),automationEnabled:!!cfg.enabled,expiresAt:Number(room?.expiresAt||0),relay:PROTOCOL,automation:AUTOMATION_PROTOCOL});
+      const room=await this.roomState(),cfg=await this.automationState(),roblox=await this.robloxState(),robloxConnected=this.robloxLive(roblox),gameConnected=!!this.game()||robloxConnected;return json(ws,{type:'relay_status',code:a.code,pairId:a.code,pairState:this.panel()&&gameConnected?'paired':gameConnected?'game-solo':this.panel()?'panel-solo':'inactive',roomActive:!!room&&Number(room.expiresAt||0)>Date.now(),consumed:!!room?.consumed,panelConnected:!!this.panel(),gameConnected,robloxConnected,gameId:robloxConnected?String(roblox.gameId||''):String(room?.gameId||''),transport:robloxConnected?'roblox-http':this.game()?'websocket':'',ingressConnected:!!this.ingress(),automationEnabled:!!cfg.enabled,expiresAt:Number(room?.expiresAt||0),relay:PROTOCOL,automation:AUTOMATION_PROTOCOL});
     }
     if(m.type==='relay_leave'){try{ws.close(1000,'leave')}catch{};return}
     if(m.type==='ping')return json(ws,{type:'pong',at:Date.now(),service:'liveplus-game-relay',version:VERSION,automation:AUTOMATION_PROTOCOL});
