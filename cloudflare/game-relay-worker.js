@@ -33,7 +33,6 @@ export class LivePlusRelayRoom extends DurableObject {
       if(String(request.headers.get('x-not-roblox-auth')||'')!==String(this.env.GAME_RELAY_KEY||''))return Response.json({ok:false,reason:'unauthorized'},{status:401});
       let body={};try{body=await request.json()}catch{return Response.json({ok:false,reason:'invalid_json'},{status:400})}
       const room=await this.roomState();if(!room||!room.active||Number(room.expiresAt||0)<=Date.now())return Response.json({ok:false,reason:'session_not_found'},{status:404});
-      if(url.pathname.endsWith('/leave')){await this.saveRoblox({lastSeenAt:0,serverId:'',gameId:''});return Response.json({ok:true,protocol:ROBLOX_PROTOCOL})}
       const current=await this.robloxState(),serverId=String(body.serverId||''),credential=String(body.credential||'');
       if(!serverId)return Response.json({ok:false,reason:'missing_server_id'},{status:400});
       if(this.game())return Response.json({ok:false,reason:'session_occupied_by_web_game'},{status:409});
