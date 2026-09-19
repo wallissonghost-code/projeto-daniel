@@ -34,11 +34,27 @@ export class LivePlusRelayRoom extends DurableObject {
       let body={};try{body=await request.json()}catch{return Response.json({ok:false,reason:'invalid_json'},{status:400})}
       const room=await this.roomState();if(!room||!room.active||Number(room.expiresAt||0)<=Date.now())return Response.json({ok:false,reason:'session_not_found'},{status:404});
       if(url.pathname.endsWith('/leave')){await this.saveRoblox({lastSeenAt:0,serverId:'',gameId:''});return Response.json({ok:true,protocol:ROBLOX_PROTOCOL})}
-      const current=await this.robloxState(),serverId=String(body.serverId||'');if(current.serverId&&current.serverId!==serverId&&this.robloxLive(current))return Response.json({ok:false,reason:'session_occupied'},{status:409});
-      const cursor=Math.max(0,Number(body.cursor||0)),commands=(Array.isArray(current.commands)?current.commands:[]).filter(x=>Number(x.cursor)>cursor);await this.saveRoblox({lastSeenAt:Date.now(),serverId,gameId:String(body.gameId||room.gameId||''),transport:'roblox-http'});return Response.json({ok:true,protocol:ROBLOX_PROTOCOL,code:body.code,transport:'roblox-http',cursor:Number(current.cursor||0),commands,panelConnected:!!this.panel()});
+      const current=await this.robloxState(),serverId=String(body.serverId||''),credential=String(body.credential||'');
+      if(!serverId)return Response.json({ok:false,reason:'missing_server_id'},{status:400});
+      if(this.game())return Response.json({ok:false,reason:'session_occupied_by_web_game'},{status:409});
+      if(current.serverId&&current.serverId!==serverId&&this.robloxLive(current))return Response.json({ok:false,reason:'session_occupied'},{status:409});
+      let activeCredential=String(current.credential||'');
+      if(activeCredential){
+        if(!credential||credential!==activeCredential)return Response.json({ok:false,reason:'invalid_credential'},{status:401});
+      }else{
+        activeCredential=crypto.randomUUID();
+      }
+      if(url.pathname.endsWith('/leave')){
+        if(!credential||credential!==activeCredential)return Response.json({ok:false,reason:'invalid_credential'},{status:401});
+        await this.saveRoblox({lastSeenAt:0,serverId:'',gameId:'',credential:''});
+        return Response.json({ok:true,protocol:ROBLOX_PROTOCOL,connected:false});
+      }
+      const cursor=Math.max(0,Number(body.cursor||0)),commands=(Array.isArray(current.commands)?current.commands:[]).filter(x=>Number(x.cursor)>cursor);
+      await this.saveRoblox({lastSeenAt:Date.now(),serverId,gameId:String(body.gameId||room.gameId||''),credential:activeCredential,transport:'roblox-http'});
+      return Response.json({ok:true,authorized:true,connected:true,protocol:ROBLOX_PROTOCOL,roomCode:body.code,transport:'roblox-http',credential:activeCredential,cursor:Number(current.cursor||0),commands,panelConnected:!!this.panel()});
     }
     if(request.headers.get('Upgrade')!=='websocket')return new Response('WebSocket required',{status:426});
-    const url=new URL(request.url),code=cleanCode(url.searchParams.get('code'));
+    const code=cleanCode(url.searchParams.get('code'));
     if(!CODE_RE.test(code))return new Response('Invalid session code',{status:400});
     const pair=new WebSocketPair(),client=pair[0],server=pair[1];
     this.ctx.acceptWebSocket(server,['pending']);
@@ -145,11 +161,11 @@ export default {
     if(url.pathname==='/roblox/poll'||url.pathname==='/roblox/leave'){
       if(request.method!=='POST')return new Response('Method not allowed',{status:405});
       let body={};try{body=await request.json()}catch{return Response.json({ok:false,reason:'invalid_json'},{status:400})}
-      const code=cleanCode(body.code);if(!CODE_RE.test(code))return Response.json({ok:false,reason:'invalid_session_code'},{status:400});
-      const gameId=String(body.gameId||'').trim(),deviceId=String(body.serverId||'').trim(),license=await verifyNotLicenseSession(body.licenseSession,env.LICENSE_SESSION_SIGNING_KEY,{deviceId});
-      if(!license.ok)return Response.json({ok:false,reason:license.reason},{status:401});
+      const code=cleanCode(body.roomCode||body.code);if(!CODE_RE.test(code))return Response.json({ok:false,reason:'invalid_session_code'},{status:400});
+      const gameId=String(body.gameId||'').trim(),serverId=String(body.serverId||'').trim();
+      if(!serverId)return Response.json({ok:false,reason:'missing_server_id'},{status:400});
       const id=env.LIVEPLUS_RELAY.idFromName(code.replace('-','')),stub=env.LIVEPLUS_RELAY.get(id);
-      return stub.fetch(new Request(new URL(`/roblox/internal${url.pathname.endsWith('leave')?'/leave':'/poll'}`,request.url),{method:'POST',headers:{'content-type':'application/json','x-not-roblox-auth':String(env.GAME_RELAY_KEY||'')},body:JSON.stringify({code,gameId,serverId:deviceId,cursor:Number(body.cursor||0)})}));
+      return stub.fetch(new Request(new URL(`/roblox/internal${url.pathname.endsWith('leave')?'/leave':'/poll'}`,request.url),{method:'POST',headers:{'content-type':'application/json','x-not-roblox-auth':String(env.GAME_RELAY_KEY||'')},body:JSON.stringify({code,gameId,serverId,cursor:Number(body.cursor||0),credential:String(body.credential||'')})}));
     }
     if(url.pathname!=='/relay')return new Response('Not found',{status:404});
     if(request.headers.get('Upgrade')!=='websocket')return new Response('WebSocket required',{status:426});
