@@ -72,7 +72,7 @@ export class LivePlusRelayRoom extends DurableObject {
         if(manifestChanged)await this.saveRoom({manifest});
         if(panel&&(manifestChanged||!robloxWasLive))json(panel,{type:'relay_message',from:'game',code:body.code,payload:manifest});
       }
-      return Response.json({ok:true,authorized:true,connected:true,protocol:ROBLOX_PROTOCOL,roomCode:body.code,gameId:robloxGameId,pairId:body.code,pairState:panel?'paired':'game-solo',transport:'roblox-http',credential:activeCredential,cursor:Number(current.cursor||0),commands,panelConnected:!!panel});
+      return Response.json({ok:true,authorized:true,connected:true,protocol:ROBLOX_PROTOCOL,roomCode:body.code,gameId:robloxGameId,pairId:body.code,pairState:panel?'paired':'game-solo',transport:'roblox-http',credential:activeCredential,cursor:commands.length?Math.max(...commands.map(x=>Number(x.sequence||0))):cursor,commands,panelConnected:!!panel});
     }
     if(request.headers.get('Upgrade')!=='websocket')return new Response('WebSocket required',{status:426});
     const code=cleanCode(url.searchParams.get('code'));
