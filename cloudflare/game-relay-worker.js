@@ -186,7 +186,7 @@ export default {
       const gameId=String(body.gameId||'').trim(),serverId=String(body.serverId||'').trim();
       if(!serverId)return Response.json({ok:false,reason:'missing_server_id'},{status:400});
       const id=env.LIVEPLUS_RELAY.idFromName(code.replace('-','')),stub=env.LIVEPLUS_RELAY.get(id);
-      return stub.fetch(new Request(new URL(`/roblox/internal${url.pathname.endsWith('leave')?'/leave':'/poll'}`,request.url),{method:'POST',headers:{'content-type':'application/json','x-not-roblox-auth':String(env.GAME_RELAY_KEY||'')},body:JSON.stringify({code,gameId,serverId,cursor:Number(body.cursor||0),credential:String(body.credential||'')})}));
+      return stub.fetch(new Request(new URL(`/roblox/internal${url.pathname.endsWith('leave')?'/leave':'/poll'}`,request.url),{method:'POST',headers:{'content-type':'application/json','x-not-roblox-auth':String(env.GAME_RELAY_KEY||'')},body:JSON.stringify({code,gameId,serverId,cursor:Number(body.cursor||0),credential:String(body.credential||''),manifest:body.manifest&&typeof body.manifest==='object'?body.manifest:undefined})}));
     }
     if(url.pathname!=='/relay')return new Response('Not found',{status:404});
     if(request.headers.get('Upgrade')!=='websocket')return new Response('WebSocket required',{status:426});
