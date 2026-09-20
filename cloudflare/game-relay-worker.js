@@ -48,11 +48,12 @@ export class LivePlusRelayRoom extends DurableObject {
         await this.saveRoblox({lastSeenAt:0,serverId:'',gameId:'',credential:''});
         return Response.json({ok:true,protocol:ROBLOX_PROTOCOL,connected:false});
       }
-      const cursor=Math.max(0,Number(body.cursor||0)),commands=(Array.isArray(current.commands)?current.commands:[]).filter(x=>Number(x.cursor)>cursor);
+      const cursor=Math.max(0,Number(body.cursor||0)),commands=(Array.isArray(current.commands)?current.commands:[]).filter(x=>Number(x.cursor)>cursor).map(x=>({...((x.command&&typeof x.command==='object')?x.command:{}),sequence:Number(x.cursor),id:String(x.command?.id||x.command?.eventId||`roblox-${x.cursor}`)}));
       const robloxGameId=String(body.gameId||room.gameId||'roblox');
       await this.saveRoblox({lastSeenAt:Date.now(),serverId,gameId:robloxGameId,credential:activeCredential,transport:'roblox-http'});
       const panel=this.panel();
-      if(panel)json(panel,{type:'relay_game_connected',code:body.code,gameId:robloxGameId,pairId:body.code,pairState:'paired',transport:'roblox-http',platform:'roblox'});
+      const robloxWasLive=this.robloxLive(current)&&String(current.serverId||'')===serverId&&String(current.gameId||'')===robloxGameId;
+      if(panel&&!robloxWasLive)json(panel,{type:'relay_game_connected',code:body.code,gameId:robloxGameId,pairId:body.code,pairState:'paired',transport:'roblox-http',platform:'roblox'});
       if(body.manifest&&typeof body.manifest==='object'){
         const raw=body.manifest,game=raw.game&&typeof raw.game==='object'?raw.game:{};
         const manifest={
@@ -67,10 +68,9 @@ export class LivePlusRelayRoom extends DurableObject {
             params:Array.isArray(action?.params)?action.params:Array.isArray(action?.parameters)?action.parameters:[]
           }))
         };
-        await this.saveRoom({manifest});
-        if(panel)json(panel,{type:'relay_message',from:'game',code:body.code,payload:manifest});
-      }else if(panel&&room.manifest){
-        json(panel,{type:'relay_message',from:'game',code:body.code,payload:room.manifest});
+        const manifestChanged=JSON.stringify(room.manifest||null)!==JSON.stringify(manifest);
+        if(manifestChanged)await this.saveRoom({manifest});
+        if(panel&&manifestChanged)json(panel,{type:'relay_message',from:'game',code:body.code,payload:manifest});
       }
       return Response.json({ok:true,authorized:true,connected:true,protocol:ROBLOX_PROTOCOL,roomCode:body.code,gameId:robloxGameId,pairId:body.code,pairState:panel?'paired':'game-solo',transport:'roblox-http',credential:activeCredential,cursor:Number(current.cursor||0),commands,panelConnected:!!panel});
     }
@@ -143,7 +143,7 @@ export class LivePlusRelayRoom extends DurableObject {
     }
     if(m.type==='relay_ingress_event'){if(a.role!=='ingress')return json(ws,{type:'relay_error',scope:'ingress_event',message:'Ingress não registrado.'});return this.routeTikTokEvent(ws,m)}
     if(m.type==='relay_panel_message'){
-      if(a.role!=='panel')return;const game=this.game();if(game)json(game,{type:'relay_message',from:'panel',code:a.code,payload:m.payload});return;
+      if(a.role!=='panel')return;const game=this.game();if(game){json(game,{type:'relay_message',from:'panel',code:a.code,payload:m.payload});return}const roblox=await this.robloxState();if(this.robloxLive(roblox)&&m.payload?.type==='command')await this.queueRobloxCommand(m.payload);return;
     }
     if(m.type==='relay_game_message'){
       if(a.role!=='game')return;
