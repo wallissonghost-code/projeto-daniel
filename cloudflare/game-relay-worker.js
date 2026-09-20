@@ -70,7 +70,7 @@ export class LivePlusRelayRoom extends DurableObject {
         };
         const manifestChanged=JSON.stringify(room.manifest||null)!==JSON.stringify(manifest);
         if(manifestChanged)await this.saveRoom({manifest});
-        if(panel&&manifestChanged)json(panel,{type:'relay_message',from:'game',code:body.code,payload:manifest});
+        if(panel&&(manifestChanged||!robloxWasLive))json(panel,{type:'relay_message',from:'game',code:body.code,payload:manifest});
       }
       return Response.json({ok:true,authorized:true,connected:true,protocol:ROBLOX_PROTOCOL,roomCode:body.code,gameId:robloxGameId,pairId:body.code,pairState:panel?'paired':'game-solo',transport:'roblox-http',credential:activeCredential,cursor:Number(current.cursor||0),commands,panelConnected:!!panel});
     }
