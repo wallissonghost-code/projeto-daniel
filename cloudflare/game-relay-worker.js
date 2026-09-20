@@ -53,7 +53,7 @@ export class LivePlusRelayRoom extends DurableObject {
       await this.saveRoblox({lastSeenAt:Date.now(),serverId,gameId:robloxGameId,credential:activeCredential,transport:'roblox-http'});
       const panel=this.panel();
       if(panel)json(panel,{type:'relay_game_connected',code:body.code,gameId:robloxGameId,pairId:body.code,pairState:'paired',transport:'roblox-http',platform:'roblox'});
-      if(panel&&body.manifest&&typeof body.manifest==='object'){
+      if(body.manifest&&typeof body.manifest==='object'){
         const raw=body.manifest,game=raw.game&&typeof raw.game==='object'?raw.game:{};
         const manifest={
           type:'game_manifest',
@@ -67,7 +67,10 @@ export class LivePlusRelayRoom extends DurableObject {
             params:Array.isArray(action?.params)?action.params:Array.isArray(action?.parameters)?action.parameters:[]
           }))
         };
-        json(panel,{type:'relay_message',from:'game',code:body.code,payload:manifest});
+        await this.saveRoom({manifest});
+        if(panel)json(panel,{type:'relay_message',from:'game',code:body.code,payload:manifest});
+      }else if(panel&&room.manifest){
+        json(panel,{type:'relay_message',from:'game',code:body.code,payload:room.manifest});
       }
       return Response.json({ok:true,authorized:true,connected:true,protocol:ROBLOX_PROTOCOL,roomCode:body.code,gameId:robloxGameId,pairId:body.code,pairState:panel?'paired':'game-solo',transport:'roblox-http',credential:activeCredential,cursor:Number(current.cursor||0),commands,panelConnected:!!panel});
     }
