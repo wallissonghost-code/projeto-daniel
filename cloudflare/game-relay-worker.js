@@ -53,6 +53,22 @@ export class LivePlusRelayRoom extends DurableObject {
       await this.saveRoblox({lastSeenAt:Date.now(),serverId,gameId:robloxGameId,credential:activeCredential,transport:'roblox-http'});
       const panel=this.panel();
       if(panel)json(panel,{type:'relay_game_connected',code:body.code,gameId:robloxGameId,pairId:body.code,pairState:'paired',transport:'roblox-http',platform:'roblox'});
+      if(panel&&body.manifest&&typeof body.manifest==='object'){
+        const raw=body.manifest,game=raw.game&&typeof raw.game==='object'?raw.game:{};
+        const manifest={
+          type:'game_manifest',
+          protocol:'liveplus-game-manifest-v1',
+          gameId:String(raw.gameId||raw.id||game.id||robloxGameId),
+          name:String(raw.name||raw.gameName||game.name||'Roblox'),
+          icon:String(raw.icon||game.icon||'🎮'),
+          version:String(raw.version||game.version||''),
+          actions:(Array.isArray(raw.actions)?raw.actions:[]).map(action=>({
+            ...action,
+            params:Array.isArray(action?.params)?action.params:Array.isArray(action?.parameters)?action.parameters:[]
+          }))
+        };
+        json(panel,{type:'relay_message',from:'game',code:body.code,payload:manifest});
+      }
       return Response.json({ok:true,authorized:true,connected:true,protocol:ROBLOX_PROTOCOL,roomCode:body.code,gameId:robloxGameId,pairId:body.code,pairState:panel?'paired':'game-solo',transport:'roblox-http',credential:activeCredential,cursor:Number(current.cursor||0),commands,panelConnected:!!panel});
     }
     if(request.headers.get('Upgrade')!=='websocket')return new Response('WebSocket required',{status:426});
